@@ -103,14 +103,69 @@ public sealed class ReceiptStoreTests : IDisposable
     [Fact]
     public void A_dead_sessions_commands_end_at_the_first_snapshot_that_notices()
     {
-        var dead = new ClaudeProcess(111, 5);
+        var dead = new TrackedProcess(111, 5);
         using var store = new ReceiptStore(StorePath, isAlive: claude => claude != dead);
         store.Record(Call("PreToolUse", "s1", "install") with { Claude = dead }, (_, _) => Snap());
-        store.Record(Call("PreToolUse", "s2", "test") with { Claude = new ClaudeProcess(222, 6) }, (_, _) => Snap("during-install"));
+        store.Record(Call("PreToolUse", "s2", "test") with { Claude = new TrackedProcess(222, 6) }, (_, _) => Snap("during-install"));
         store.Record(Call("PostToolUse", "s2", "test"), (_, _) => Snap("during-install", "after-it-died"));
 
         Assert.Equal(new Command("s1", "install", 1, 2), store.Commands()[0]);
         Assert.Equal([["install"], ["test"]], store.Verdicts().Select(v => v.SuspectToolUseIds));
+    }
+
+    [Fact]
+    public void A_background_command_stays_open_until_its_shell_exits()
+    {
+        var running = new HashSet<TrackedProcess>();
+        using var store = new ReceiptStore(StorePath, isAlive: running.Contains);
+        store.Record(Call("PreToolUse", "s1", "dev-server"), (_, _) => Snap());
+        var shell = new TrackedProcess(333, DateTime.UtcNow.Ticks);
+        running.Add(shell);
+        store.Record(Call("PostToolUse", "s1", "dev-server") with { BackgroundShells = [shell] }, (_, _) => Snap());
+        store.Record(new HookCall("PostToolBatch", "s1", "", "", ["dev-server"]), (_, _) => Snap());
+        store.Record(new HookCall("UserPromptSubmit", "s1", "", ""), (_, _) => Snap());
+        store.Record(Call("PreToolUse", "s1", "test"), (_, _) => Snap("while-the-server-ran"));
+
+        Assert.Null(store.Commands().Single(c => c.ToolUseId == "dev-server").EndSnapshot);
+
+        running.Remove(shell);
+        store.Record(Call("PostToolUse", "s1", "test"), (_, _) => Snap("while-the-server-ran"));
+
+        Assert.Equal(4, store.Commands().Single(c => c.ToolUseId == "dev-server").EndSnapshot);
+        Assert.Equal(["dev-server"], store.Verdicts().Single().SuspectToolUseIds);
+    }
+
+    // A process Claude Code started before the command, such as an MCP server, isn't its shell.
+    [Fact]
+    public void An_older_process_is_not_taken_for_a_background_commands_shell()
+    {
+        var mcpServer = new TrackedProcess(444, DateTime.UtcNow.AddMinutes(-5).Ticks);
+        using var store = new ReceiptStore(StorePath, isAlive: _ => true);
+        store.Record(Call("PreToolUse", "s1", "bg"), (_, _) => Snap());
+        store.Record(Call("PostToolUse", "s1", "bg") with { BackgroundShells = [mcpServer] }, (_, _) => Snap());
+
+        Assert.Equal(2, store.Commands().Single().EndSnapshot);
+    }
+
+    [Fact]
+    public void A_child_process_is_found_with_its_start_time()
+    {
+        using var me = System.Diagnostics.Process.GetCurrentProcess();
+        var parent = new TrackedProcess(me.Id, me.StartTime.ToUniversalTime().Ticks);
+        using var child = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("cmd.exe")
+        {
+            RedirectStandardInput = true,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+        })!;
+        try
+        {
+            Assert.Contains(TrackedProcess.ChildrenOf(parent), p => p.Pid == child.Id && TrackedProcess.IsAlive(p));
+        }
+        finally
+        {
+            child.Kill();
+        }
     }
 
     [Fact]
@@ -119,8 +174,8 @@ public sealed class ReceiptStoreTests : IDisposable
         using var me = System.Diagnostics.Process.GetCurrentProcess();
         var started = me.StartTime.ToUniversalTime().Ticks;
 
-        Assert.True(ClaudeProcess.IsAlive(new ClaudeProcess(me.Id, started)));
-        Assert.False(ClaudeProcess.IsAlive(new ClaudeProcess(me.Id, started - 1)));
+        Assert.True(TrackedProcess.IsAlive(new TrackedProcess(me.Id, started)));
+        Assert.False(TrackedProcess.IsAlive(new TrackedProcess(me.Id, started - 1)));
     }
 
     public void Dispose() => Directory.Delete(_dir, recursive: true);

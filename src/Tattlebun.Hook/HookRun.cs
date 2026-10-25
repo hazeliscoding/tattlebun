@@ -19,13 +19,18 @@ public static class HookRun
                 return 0;
             }
 
+            var claude = input.HookEventName is "PreToolUse" or "PostToolUse" ? TrackedProcess.ClaudeCode() : null;
+            var background = input.HookEventName == "PostToolUse"
+                && input.ToolResponse is { ValueKind: JsonValueKind.Object } response && response.TryGetProperty("backgroundTaskId", out _);
+
             // Only these fields reach the store; the command and its output never do.
             using var store = new ReceiptStore(storePath);
             store.Record(
                 new HookCall(
                     input.HookEventName, input.SessionId, input.ToolUseId ?? "", input.ToolName ?? "",
                     [.. input.ToolCalls?.Select(c => c.ToolUseId).OfType<string>() ?? []],
-                    input.HookEventName == "PreToolUse" ? ClaudeProcess.FromEnvironment() : null),
+                    claude,
+                    background && claude is not null ? [.. TrackedProcess.ChildrenOf(claude).Where(p => p.Pid != Environment.ProcessId)] : null),
                 read);
         }
         catch (Exception)
@@ -37,7 +42,8 @@ public static class HookRun
     }
 }
 
-internal sealed record HookInput(string? SessionId, string? HookEventName, string? ToolName, string? ToolUseId, IReadOnlyList<BatchCall>? ToolCalls);
+internal sealed record HookInput(
+    string? SessionId, string? HookEventName, string? ToolName, string? ToolUseId, IReadOnlyList<BatchCall>? ToolCalls, JsonElement? ToolResponse);
 
 internal sealed record BatchCall(string? ToolUseId);
 

@@ -1,5 +1,3 @@
-using System.ComponentModel;
-using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -15,44 +13,12 @@ namespace Tattlebun.Windows;
 /// <param name="Tool">The tool's name.</param>
 /// <param name="BatchToolUseIds">For PostToolBatch, every call in the batch.</param>
 /// <param name="Claude">The Claude Code process that ran the hook.</param>
-public sealed record HookCall(string Event, string Session, string ToolUseId, string Tool, IReadOnlyList<string>? BatchToolUseIds = null, ClaudeProcess? Claude = null);
-
-/// <summary>A process, told apart from a later one that reuses its ID by its start time.</summary>
-public sealed record ClaudeProcess(int Pid, long StartedTicks)
-{
-    // Claude Code sets CLAUDE_PID for its hooks to its own process ID.
-    public static ClaudeProcess? FromEnvironment()
-    {
-        if (!int.TryParse(Environment.GetEnvironmentVariable("CLAUDE_PID"), out var pid))
-        {
-            return null;
-        }
-
-        try
-        {
-            using var process = Process.GetProcessById(pid);
-            return new ClaudeProcess(pid, process.StartTime.ToUniversalTime().Ticks);
-        }
-        catch (Exception e) when (e is ArgumentException or InvalidOperationException or Win32Exception)
-        {
-            return null;
-        }
-    }
-
-    // A process this user can't open has taken over the ID, so this user's Claude Code is gone too.
-    public static bool IsAlive(ClaudeProcess claude)
-    {
-        try
-        {
-            using var process = Process.GetProcessById(claude.Pid);
-            return process.StartTime.ToUniversalTime().Ticks == claude.StartedTicks;
-        }
-        catch (Exception e) when (e is ArgumentException or InvalidOperationException or Win32Exception)
-        {
-            return false;
-        }
-    }
-}
+/// <param name="BackgroundShells">
+/// For a background command's PostToolUse, Claude Code's other children: its shell is among those that started after the command.
+/// </param>
+public sealed record HookCall(
+    string Event, string Session, string ToolUseId, string Tool, IReadOnlyList<string>? BatchToolUseIds = null,
+    TrackedProcess? Claude = null, IReadOnlyList<TrackedProcess>? BackgroundShells = null);
 
 /// <summary>One change found between two snapshots, and the commands that were running while it happened.</summary>
 public sealed record StoredVerdict(long Snapshot, Change Change, IReadOnlyList<string> SuspectToolUseIds);
@@ -65,11 +31,11 @@ public sealed record StoredVerdict(long Snapshot, Change Change, IReadOnlyList<s
 public sealed class ReceiptStore : IDisposable
 {
     private readonly SqliteConnection _db;
-    private readonly Func<ClaudeProcess, bool> _isAlive;
+    private readonly Func<TrackedProcess, bool> _isAlive;
 
-    public ReceiptStore(string path, Func<ClaudeProcess, bool>? isAlive = null)
+    public ReceiptStore(string path, Func<TrackedProcess, bool>? isAlive = null)
     {
-        _isAlive = isAlive ?? ClaudeProcess.IsAlive;
+        _isAlive = isAlive ?? TrackedProcess.IsAlive;
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         // Microsoft.Data.Sqlite finds the bundled SQLite by reflection, which NativeAOT trims away.
         SQLitePCL.Batteries_V2.Init();
@@ -78,13 +44,14 @@ public sealed class ReceiptStore : IDisposable
         Execute("""
             PRAGMA journal_mode = WAL;
             CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value BLOB NOT NULL);
-            CREATE TABLE IF NOT EXISTS snapshots (number INTEGER PRIMARY KEY AUTOINCREMENT, taken TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS snapshots (number INTEGER PRIMARY KEY AUTOINCREMENT, taken_utc_ticks INTEGER NOT NULL);
             CREATE TABLE IF NOT EXISTS commands (
                 tool_use_id TEXT PRIMARY KEY, session TEXT NOT NULL, tool TEXT NOT NULL,
                 start_snapshot INTEGER NOT NULL, end_snapshot INTEGER, claude_pid INTEGER, claude_started INTEGER);
             CREATE TABLE IF NOT EXISTS changes (
                 id INTEGER PRIMARY KEY AUTOINCREMENT, snapshot INTEGER NOT NULL, part TEXT NOT NULL, name TEXT NOT NULL, kind INTEGER NOT NULL);
             CREATE TABLE IF NOT EXISTS suspects (change_id INTEGER NOT NULL, tool_use_id TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS background_shells (tool_use_id TEXT NOT NULL, pid INTEGER NOT NULL, started INTEGER NOT NULL);
             """);
     }
 
@@ -106,14 +73,20 @@ public sealed class ReceiptStore : IDisposable
         var fingerprinter = new Fingerprinter(FingerprintKey());
         var (previous, previousNumber) = LastSnapshot();
         var now = read(fingerprinter, previous);
-        var number = Scalar<long>("INSERT INTO snapshots (taken) VALUES ($taken) RETURNING number", ("$taken", now.Taken.ToString("o")));
+        var number = Scalar<long>("INSERT INTO snapshots (taken_utc_ticks) VALUES ($taken) RETURNING number", ("$taken", now.Taken.UtcTicks));
 
         // The commands of a session that died end at this snapshot, the first to notice.
-        foreach (var claude in OpenClaudeProcesses().Where(c => !_isAlive(c)))
+        foreach (var claude in OpenClaudeCodes().Where(c => !_isAlive(c)))
         {
             Execute(
                 "UPDATE commands SET end_snapshot = $number WHERE claude_pid = $pid AND claude_started = $started AND end_snapshot IS NULL",
                 ("$number", number), ("$pid", claude.Pid), ("$started", claude.StartedTicks));
+        }
+
+        // So do background commands whose shells have all exited.
+        foreach (var (id, shells) in OpenBackgroundShells().Where(b => !b.Shells.Any(_isAlive)))
+        {
+            Execute("UPDATE commands SET end_snapshot = $number WHERE tool_use_id = $id AND end_snapshot IS NULL", ("$number", number), ("$id", id));
         }
 
         if (previous is not null)
@@ -141,7 +114,7 @@ public sealed class ReceiptStore : IDisposable
                 ("$tool_use_id", call.ToolUseId), ("$session", call.Session), ("$tool", call.Tool), ("$number", number),
                 ("$pid", (object?)call.Claude?.Pid ?? DBNull.Value), ("$started", (object?)call.Claude?.StartedTicks ?? DBNull.Value));
         }
-        else if (call.Event is "PostToolUse" or "PostToolUseFailure")
+        else if (call.Event is "PostToolUse" or "PostToolUseFailure" && !KeepRunningInBackground(call))
         {
             Execute("UPDATE commands SET end_snapshot = $number WHERE tool_use_id = $tool_use_id AND end_snapshot IS NULL", ("$number", number), ("$tool_use_id", call.ToolUseId));
         }
@@ -160,24 +133,57 @@ public sealed class ReceiptStore : IDisposable
     private void CloseUnfinished(HookCall call)
     {
         var latest = Scalar<long>("SELECT coalesce(max(number), 0) FROM snapshots");
+        const string StillOpen = "end_snapshot IS NULL AND tool_use_id NOT IN (SELECT tool_use_id FROM background_shells)";
         if (call.Event == "UserPromptSubmit")
         {
-            Execute("UPDATE commands SET end_snapshot = $latest WHERE session = $session AND end_snapshot IS NULL", ("$latest", latest), ("$session", call.Session));
+            Execute($"UPDATE commands SET end_snapshot = $latest WHERE session = $session AND {StillOpen}", ("$latest", latest), ("$session", call.Session));
             return;
         }
 
         foreach (var id in call.BatchToolUseIds ?? [])
         {
-            Execute("UPDATE commands SET end_snapshot = $latest WHERE tool_use_id = $id AND end_snapshot IS NULL", ("$latest", latest), ("$id", id));
+            Execute($"UPDATE commands SET end_snapshot = $latest WHERE tool_use_id = $id AND {StillOpen}", ("$latest", latest), ("$id", id));
         }
     }
 
-    private List<ClaudeProcess> OpenClaudeProcesses()
+    // A background command's PostToolUse comes as soon as it starts. Its shell is one of Claude Code's children that
+    // started after the command's own snapshot, and the command stays open until those have all exited. Another
+    // call's process can slip in, but it exits within seconds.
+    private bool KeepRunningInBackground(HookCall call)
     {
-        var processes = new List<ClaudeProcess>();
+        if (call.BackgroundShells is not { Count: > 0 })
+        {
+            return false;
+        }
+
+        var startedAt = Scalar<long?>(
+            "SELECT s.taken_utc_ticks FROM commands c JOIN snapshots s ON s.number = c.start_snapshot WHERE c.tool_use_id = $id", ("$id", call.ToolUseId));
+        var shells = (call.BackgroundShells ?? []).Where(p => startedAt is not null && p.StartedTicks >= startedAt).ToList();
+        foreach (var shell in shells)
+        {
+            Execute(
+                "INSERT INTO background_shells (tool_use_id, pid, started) VALUES ($id, $pid, $started)",
+                ("$id", call.ToolUseId), ("$pid", shell.Pid), ("$started", shell.StartedTicks));
+        }
+
+        return shells.Count > 0;
+    }
+
+    private List<(string Id, List<TrackedProcess> Shells)> OpenBackgroundShells()
+    {
+        var shells = new Dictionary<string, List<TrackedProcess>>();
+        Each(
+            "SELECT b.tool_use_id, b.pid, b.started FROM background_shells b JOIN commands c ON c.tool_use_id = b.tool_use_id WHERE c.end_snapshot IS NULL",
+            row => (shells.TryGetValue(row.GetString(0), out var list) ? list : shells[row.GetString(0)] = []).Add(new TrackedProcess(row.GetInt32(1), row.GetInt64(2))));
+        return [.. shells.Select(p => (p.Key, p.Value))];
+    }
+
+    private List<TrackedProcess> OpenClaudeCodes()
+    {
+        var processes = new List<TrackedProcess>();
         Each(
             "SELECT DISTINCT claude_pid, claude_started FROM commands WHERE end_snapshot IS NULL AND claude_pid IS NOT NULL",
-            row => processes.Add(new ClaudeProcess(row.GetInt32(0), row.GetInt64(1))));
+            row => processes.Add(new TrackedProcess(row.GetInt32(0), row.GetInt64(1))));
         return processes;
     }
 
