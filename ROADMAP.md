@@ -107,6 +107,7 @@ Claude's calls, approved by the owner with the design:
 - A link from Sweepling's leftovers to the receipt of the session that started them.
 - Undo of machine-wide changes through a separate elevated step, if copying commands proves annoying.
 - Copy a receipt as Markdown, to paste into a pull request.
+- Claude Code's session scratchpads in `%TEMP%\claude`, one folder per session, offered for deletion once their session has ended. On 2026-10-25 the owner's PC had 21.4 GB in 464 of them, 351 untouched for a week. The largest, 13.4 GB, belonged to a session still writing to it, so neither size nor age can decide which ones are stale.
 
 ## Not planned
 
