@@ -45,7 +45,7 @@ Planned for 1.0:
 Tattlebun reads your environment, your configs and what your agents ran, so it has to be easy to trust.
 
 - **Read-only until you confirm an undo.** Taking a snapshot changes nothing.
-- **No network.** There is no networking code, no updater and no telemetry.
+- **No network, except updates.** The tray app checks GitHub Releases for a new version, and you can turn that off. That's its only network call: there's no telemetry, and nothing about your PC is sent.
 - **Nothing leaves your PC.** To put a dotfile or variable back, Tattlebun keeps its old value, encrypted with Windows DPAPI so only your account on this PC can read it, and deletes it after 30 days. Values that look like secrets are masked on screen.
 - **Runs unelevated.** It never asks for admin.
 - **Never blocks your agent.** If Tattlebun fails or runs slow, the command runs anyway. A snapshot has a budget of 100 ms.
@@ -61,6 +61,7 @@ flowchart LR
     hook --> db[("Receipts, kept on this PC")]
     hook -. "new changes" .-> tray["Tattlebun tray app"]
     tray --> db
+    tray -. "updates" .-> releases["GitHub Releases"]
     tray -- "undo, after you confirm" --> pc
 ```
 

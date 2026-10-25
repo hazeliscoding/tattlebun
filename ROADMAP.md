@@ -35,13 +35,14 @@ Claude's calls, approved by the owner with the design:
 - **Read state straight from the registry and disk,** never by running `npm ls -g`, `pip list` or `winget list`, and skip a part whose last-write time hasn't changed. That's how a snapshot stays under 100 ms. This gives up those tools' own view, such as packages a tool installed somewhere unusual.
 - **One SQLite file in `%LOCALAPPDATA%\Tattlebun`** for the receipts, the last snapshot and the encrypted old values, in WAL mode, because parallel tool calls run several hooks at once. This gives up plain files a person could read.
 - **The hooks ship as a Claude Code plugin you add yourself.** Tattlebun never edits `~/.claude/settings.json`, because it shouldn't make the kind of change it reports, and you see the hooks before they run. A hook that fails or times out doesn't block the command, which is Claude Code's default. This gives up a one-step setup.
-- **No network code, so no in-app updater.** Updates come through winget and GitHub Releases, as in Staypaw.
+- **No network code, so no in-app updater.** Updates come through winget and GitHub Releases, as in Staypaw. *(Superseded: updates apply on their own, under Decisions (2026-10-25).)*
 - **Velopack Setup and a portable zip, signed through the Artifact Signing setup Staypaw uses.** Setup installs per user and never asks for admin.
 - **The spike comes first in M1,** not before Day 1. Day 1 is only docs, so they're cheap to change if the spike shows snapshots can't stay under 100 ms.
 
 ## Decisions (2026-10-25)
 
 - **Tilly Stubbs is the mascot, beside the placeholder mark.** The owner's call. She is a front-desk clerk who notices every little change and tells you exactly what happened, fairly and kindly: the mark's bunny-over-a-receipt as a person, drawn in the owner's anime-pipeline. Receipts say "while", not "by", so she tells and never accuses. She appears in the README, in `docs/brand/tilly/` and in launch posts; whether her psst sticker goes on M2's notification is decided when M2 starts. The bunny mark stays the logo and the tray icon, and the real logo is still an owner item. Her art was drawn with an AI image model, and it is Apache-2.0 like the code; the README says both. Her one-of-these sticker stays out, because its see-through gaps show a dark page through it. Her cardigan (`#507DBF`) stays as drawn, near the mark's cornflower, rather than retinting her. This gives up a single mark, a sticker for "one of these" for now, and exclusive rights to her art: anyone may reuse or change it.
+- **Updates apply on their own, as in Sweepling.** The owner's call. Velopack in the tray app checks GitHub Releases a minute after it starts and every 4 hours after, downloads in the background, and restarts into the update only while the review window is closed, so it never cuts off an undo. A tick in the tray menu turns it off, and a build run from source never checks. The update check is the only network call: Tattlebun's own code never references a networking assembly, and the hook doesn't reference Velopack, so a snapshot never touches the network. No telemetry. This gives up the strictest promise, no network code at all, and some size: Velopack and its HTTP stack grew Sweepling's exe from 19.9 to 25.6 MB.
 
 ## M0: Placeholder (as soon as possible)
 
@@ -55,7 +56,7 @@ Claude's calls, approved by the owner with the design:
 - [ ] `tattlebun-hook` reads the hook's JSON from stdin, appends one line to a log and exits 0. Nothing else yet.
 - [ ] Design tokens: a spacing scale, a type scale, a palette with shades and a few shadow levels.
 - [ ] NativeAOT publish for `win-x64` of both programs, with no trim or AOT warnings.
-- [ ] Guardrail tests, each with a positive control: `Tattlebun.Core` references neither Avalonia nor any Win32 interop, and no Tattlebun assembly uses `System.Net`.
+- [ ] Guardrail tests, each with a positive control: `Tattlebun.Core` references neither Avalonia nor any Win32 interop, Tattlebun's own code references no networking assembly, and only the tray app references Velopack.
 - [ ] CI on Windows: build, test, and secret scanning with the gitleaks release binary, checked against its published checksum and run with `--log-opts="--full-history HEAD"`.
 
 **Done when:** CI is green on `main`, and `dotnet publish -r win-x64` gives a native tray exe that starts in the tray, and a native hook exe that exits 0 on a sample `PreToolUse` payload.
@@ -97,13 +98,14 @@ Claude's calls, approved by the owner with the design:
 ## M4: 1.0
 
 - [ ] A Velopack per-user Setup and a portable zip, built by a release workflow.
+- [ ] Automatic updates through Velopack, as in Sweepling: a check a minute after start and every 4 hours, held while the review window is open, with an "Update automatically" tick in the tray menu.
 - [ ] Sign releases with Artifact Signing through OIDC, from a `release` environment that only `v*` tags can deploy to, as in Staypaw.
 - [ ] Scan the published exes with Microsoft Defender.
 - [ ] Publish the plugin from this repo, with install steps in the README.
 - [ ] Submit a winget manifest.
 - [ ] A screenshot and a short demo in the README.
 
-**Done when:** `winget install hazeliscoding.Tattlebun` installs a signed build that starts in the tray, and after adding the plugin, an agent's `npm i -g` shows up in the tray with Undo.
+**Done when:** `winget install hazeliscoding.Tattlebun` installs a signed build that starts in the tray, and after adding the plugin, an agent's `npm i -g` shows up in the tray with Undo; and an installed release updates itself to a later test release.
 
 ## Later
 
@@ -117,7 +119,7 @@ Claude's calls, approved by the owner with the design:
 
 ## Not planned
 
-- **Network code:** an updater, telemetry or crash reporting.
+- **Any network call besides the update check:** telemetry, crash reporting or accounts.
 - **Running elevated, or ETW tracing,** which needs admin. See Decisions.
 - **Watching the whole disk,** or reading files outside the watch list.
 - **macOS and Linux.** Claude Code's sandbox can already confine agents there.

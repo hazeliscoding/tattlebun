@@ -13,7 +13,7 @@ These are the working rules for agents in this repo. Tattlebun is a Windows tray
 Tattlebun reads people's environment, configs and what their agents ran. They run it only if they can trust it, so never break these, not even in dev tooling that ships.
 
 - **Read-only until an undo is confirmed.** A snapshot writes nothing outside Tattlebun's own folder in `%LOCALAPPDATA%`. A tool that reports what changed on your PC can't make changes of its own.
-- **No networking code.** No `HttpClient`, sockets, updater or telemetry, and no package that brings them in. A test will fail on any `System.Net` use in Tattlebun's assemblies. Receipts describe someone's machine, and they never leave it.
+- **No network call besides the update check.** Velopack in the tray app checks GitHub Releases, and that's all: no telemetry, and nothing about the PC is sent. Tattlebun's own code never references a networking assembly (`HttpClient`, sockets), and the hook never references Velopack; a test enforces both. Receipts describe someone's machine, and they never leave it.
 - **Never store a file's contents or a variable's value in plain text.** Old values are kept only so undo can put them back, encrypted with DPAPI for the current user, and deleted after 30 days or when the receipt is dismissed. Never write a value, a diff line or a command's output to a log, a test fixture or a debug dump. `.npmrc` and user variables often hold tokens.
 - **Mask secrets on screen.** Values of keys that look like secrets (token, password, auth, key) are masked in diffs and commands. The owner may screen-share a receipt.
 - **Never block the agent.** `tattlebun-hook` catches every failure, exits 0 and prints no decision. Exit code 2 from a `PreToolUse` hook blocks the tool call, so never return it. A snapshot has a budget of 100 ms: never shell out to `npm`, `pip`, `winget` or `reg.exe` from the hook.
@@ -42,7 +42,7 @@ Tattlebun reads people's environment, configs and what their agents ran. They ru
 - **A special-purpose library** (a parser, an installer framework): add it yourself, with its reason in the commit message.
 - **A general-purpose helper:** only after checking that nothing in the project already does the job.
 - **A framework:** never without asking the owner.
-- **Anything that brings in network code:** never. See the trust contract.
+- **Anything that brings in network code:** never, besides Velopack in the tray app. See the trust contract.
 
 ## Glossary
 
