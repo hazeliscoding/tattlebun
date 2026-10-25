@@ -1,0 +1,19 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      { "matcher": "Bash|PowerShell|Write|Edit", "hooks": [{ "type": "command", "command": "${user_config.hook_path}", "args": [], "timeout": 10 }] }
+    ],
+    "PostToolUse": [
+      { "matcher": "Bash|PowerShell|Write|Edit", "hooks": [{ "type": "command", "command": "${user_config.hook_path}", "args": [], "timeout": 10 }] }
+    ],
+    "PostToolUseFailure": [
+      { "matcher": "Bash|PowerShell|Write|Edit", "hooks": [{ "type": "command", "command": "${user_config.hook_path}", "args": [], "timeout": 10 }] }
+    ],
+    "PostToolBatch": [
+      { "hooks": [{ "type": "command", "command": "${user_config.hook_path}", "args": [], "timeout": 10 }] }
+    ],
+    "UserPromptSubmit": [
+      { "hooks": [{ "type": "command", "command": "${user_config.hook_path}", "args": [], "timeout": 10 }] }
+    ]
+  }
+}

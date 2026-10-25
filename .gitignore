@@ -20,6 +20,7 @@ TestResults/
 .DS_Store
 Thumbs.db
 
-# Agent guidelines are committed; this overrides the global gitignore
+# Agent guidelines and the Claude Code plugin are committed; this overrides the global gitignore
+!.claude-plugin/
 !AGENTS.md
 !CLAUDE.md

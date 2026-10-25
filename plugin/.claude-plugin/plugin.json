@@ -1,0 +1,17 @@
+{
+  "name": "tattlebun",
+  "version": "0.1.0",
+  "description": "Keeps a receipt of what each agent command changed on your PC outside the repo. Needs the Tattlebun app.",
+  "author": { "name": "Hazel Granados" },
+  "homepage": "https://github.com/hazeliscoding/tattlebun",
+  "repository": "https://github.com/hazeliscoding/tattlebun",
+  "license": "Apache-2.0",
+  "userConfig": {
+    "hook_path": {
+      "type": "file",
+      "title": "tattlebun-hook.exe",
+      "description": "Where Tattlebun installed tattlebun-hook.exe, usually %LOCALAPPDATA%\\Tattlebun\\current\\tattlebun-hook.exe. The Tattlebun tray app shows the exact path.",
+      "required": true
+    }
+  }
+}
