@@ -25,7 +25,7 @@ The owner's:
 - **Old values are kept, encrypted.** A dotfile or variable can only go back if its old value was kept. Tattlebun keeps the version from before each change, encrypted with DPAPI for the current user, and deletes it after 30 days or when you dismiss the receipt. Diffs mask values of keys that look like secrets (token, password, auth). This gives up the strictest promise, never storing contents, because `.npmrc` and user variables can hold tokens.
 - **Claude Code CLI only in version one,** as Sweepling started. Its hooks give the design everything it needs, and it's what the owner runs most. The snapshot engine doesn't care which agent runs the command, so others come as more hooks. This gives up Codex and other agents at launch.
 - **Its own app, not part of Sweepling.** Sweepling closes processes your sessions left running, and Tattlebun undoes what they changed, so each tells a smaller trust story. Per-command hooks don't need Sweepling's process trees, which was the reason to merge them. This gives up a shared tray icon and install.
-- **The brand is a placeholder:** a wide-eyed bunny peeking over a receipt, with one ear perked, in `docs/brand/`. Its eyes are open where Shybun's are closed, and its accent is cornflower, since Shybun has pink, Staypaw orange and Sweepling gold. The wordmark is Fredoka SemiBold, as in the other apps. The real logo and the mascot are M0 owner items.
+- **The brand is a placeholder:** a wide-eyed bunny peeking over a receipt, with one ear perked, in `docs/brand/`. Its eyes are open where Shybun's are closed, and its accent is cornflower, since Shybun has pink, Staypaw orange and Sweepling gold. The wordmark is Fredoka SemiBold, as in the other apps. The real logo and the mascot are M0 owner items. *(The mascot half is superseded: Tilly is the mascot, under Decisions (2026-10-25).)*
 
 Claude's calls, approved by the owner with the design:
 
@@ -39,12 +39,17 @@ Claude's calls, approved by the owner with the design:
 - **Velopack Setup and a portable zip, signed through the Artifact Signing setup Staypaw uses.** Setup installs per user and never asks for admin.
 - **The spike comes first in M1,** not before Day 1. Day 1 is only docs, so they're cheap to change if the spike shows snapshots can't stay under 100 ms.
 
+## Decisions (2026-10-25)
+
+- **Tilly Stubbs is the mascot, beside the placeholder mark.** The owner's call. She is a front-desk clerk who notices every little change and tells you exactly what happened, fairly and kindly: the mark's bunny-over-a-receipt as a person, drawn in the owner's anime-pipeline. Receipts say "while", not "by", so she tells and never accuses. She appears in the README, in `docs/brand/tilly/` and in launch posts; whether her psst sticker goes on M2's notification is decided when M2 starts. The bunny mark stays the logo and the tray icon, and the real logo is still an owner item. Her art was drawn with an AI image model, and it is Apache-2.0 like the code; the README says both. Her one-of-these sticker stays out, because its see-through gaps show a dark page through it. Her cardigan (`#507DBF`) stays as drawn, near the mark's cornflower, rather than retinting her. This gives up a single mark, a sticker for "one of these" for now, and exclusive rights to her art: anyone may reuse or change it.
+
 ## M0: Placeholder (as soon as possible)
 
 - [x] Add `LICENSE` (Apache-2.0), `README.md`, `ROADMAP.md` and `AGENTS.md`.
 - [x] Add the placeholder mark and its lockups to `docs/brand/`.
 - [ ] Search trademarks for Tattlebun: USPTO. *(owner)*
-- [ ] Pick the real logo and the bunny mascot in a claude.ai design project, and export `mark.svg` with a `-dark` variant. `scripts/make_lockup.py` rebuilds the lockups from it. *(owner)*
+- [x] The bunny mascot: Tilly Stubbs, from anime-pipeline, in `docs/brand/tilly/` and the README.
+- [ ] Pick the real logo in a claude.ai design project, perhaps drawn from Tilly's bunny-head pin, and export `mark.svg` with a `-dark` variant. `scripts/make_lockup.py` rebuilds the lockups from it. *(owner)*
 - [ ] Scaffold `Tattlebun.Core`, `Tattlebun.Windows`, `Tattlebun.Hook`, `Tattlebun.Desktop` and `Tattlebun.Tests` on .NET 10 and Avalonia 12, with central package versions and warnings as errors.
 - [ ] A tray icon made from the mark, with Quit. No window yet. Load Avalonia's Fluent theme, or the tray menu opens empty (Staypaw's fix).
 - [ ] `tattlebun-hook` reads the hook's JSON from stdin, appends one line to a log and exits 0. Nothing else yet.
@@ -108,6 +113,7 @@ Claude's calls, approved by the owner with the design:
 - Undo of machine-wide changes through a separate elevated step, if copying commands proves annoying.
 - Copy a receipt as Markdown, to paste into a pull request.
 - Claude Code's session scratchpads in `%TEMP%\claude`, one folder per session, offered for deletion once their session has ended. On 2026-10-25 the owner's PC had 21.4 GB in 464 of them, 351 untouched for a week. The largest, 13.4 GB, belonged to a session still writing to it, so neither size nor age can decide which ones are stale.
+- Tilly's one-of-these sticker, re-rolled in anime-pipeline to close its see-through gaps and bring back its sweat drop, and her all-clear sticker for an empty receipt. Both need a new image budget there; all-clear's preset is ready in her spec.
 
 ## Not planned
 
