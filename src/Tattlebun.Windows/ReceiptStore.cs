@@ -148,6 +148,13 @@ public sealed class ReceiptStore : IDisposable
 
     public IReadOnlyList<Command> Commands() => Commands("");
 
+    public IReadOnlyDictionary<string, string> Tools()
+    {
+        var tools = new Dictionary<string, string>();
+        Each("SELECT tool_use_id, tool FROM commands", row => tools[row.GetString(0)] = row.GetString(1));
+        return tools;
+    }
+
     // A denied call fires PreToolUse and nothing else, and an interrupted turn can skip PostToolBatch too. These end
     // at the latest snapshot without taking a new one: a change such a call made after it goes unblamed, which is
     // better than blaming the wrong command, and batches and prompts cost no snapshot.

@@ -79,7 +79,7 @@ Claude's calls, approved by the owner with the design:
 - [x] Record the path of each Write and Edit call outside the session's working folder. It joins the watch list before that call's snapshot and stays on it.
 - [x] Receipts and the last snapshot in SQLite (WAL), safe with parallel hooks. Each hook takes the write lock (`BEGIN IMMEDIATE`) before it reads its snapshot. `PostToolUseFailure` closes a command too. First numbers on the owner's PC, native, direct spawn: a median of 66.5 ms over 60 calls, but only 50 under 100 ms (p95 173 ms, cold first call 190 ms). Profile it before M1's Done when.
 - [ ] A Claude Code plugin in this repo whose hooks run `tattlebun-hook` in exec form for Bash, PowerShell, Write and Edit.
-- [ ] `tattlebun-hook --list` prints recent receipts, for checking before the window exists.
+- [x] `tattlebun-hook --list` prints recent receipts, for checking before the window exists.
 
 **Done when:** in a real session, `npm i -g` of a small package shows up on its command's receipt; a command that changes nothing gets an empty receipt; overlapping commands from two sessions both get "one of these"; and over 200 commands on the owner's PC, 95% of snapshots take under 100 ms.
 
