@@ -63,6 +63,7 @@ One meaning per term. Use these words in code, docs and commits.
 ## Commands
 
 - `uv run --no-project --with fonttools --with uharfbuzz python -I scripts/make_lockup.py <Fredoka-SemiBold.ttf> docs/brand` rebuilds the lockups. Its header says where to get the font.
+- `dotnet run scripts/make-icons.cs` rebuilds `docs/brand/tattlebun.ico` from the mark.
 
 ## Working style
 
