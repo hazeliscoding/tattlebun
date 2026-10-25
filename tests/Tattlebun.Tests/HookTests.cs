@@ -1,56 +1,77 @@
 using System.Text;
+using Tattlebun.Core;
 using Tattlebun.Hook;
+using Tattlebun.Windows;
 
 namespace Tattlebun.Tests;
 
 public sealed class HookTests : IDisposable
 {
-    private const string PreToolUse = """
-        {"session_id":"session-1","transcript_path":"t.jsonl","cwd":"C:\\repo","hook_event_name":"PreToolUse",
-         "tool_name":"Bash","tool_use_id":"toolu_1","tool_input":{"command":"set NPM_TOKEN=fake-token-for-tests"}}
-        """;
+    private const string Command = "set NPM_TOKEN=fake-token-for-tests";
 
     private readonly string _dir = Directory.CreateTempSubdirectory("tattlebun-hook-").FullName;
 
-    private string LogPath => Path.Combine(_dir, "hook.log");
+    private string StorePath => Path.Combine(_dir, "tattlebun.db");
 
     [Fact]
-    public void A_payload_appends_one_line_without_the_command()
+    public void A_change_between_PreToolUse_and_PostToolUse_lands_on_that_command()
     {
-        Assert.Equal(0, Run(PreToolUse, LogPath));
+        var reads = new Queue<Snapshot>([Snap("a"), Snap("a", "b")]);
 
-        var line = Assert.Single(File.ReadAllLines(LogPath));
-        Assert.Contains("\"session\":\"session-1\"", line);
-        Assert.Contains("\"tool_use_id\":\"toolu_1\"", line);
-        Assert.DoesNotContain("fake-token-for-tests", line);
+        Assert.Equal(0, Run(Payload("PreToolUse"), (_, _) => reads.Dequeue()));
+        Assert.Equal(0, Run(Payload("PostToolUse"), (_, _) => reads.Dequeue()));
+
+        using var store = new ReceiptStore(StorePath);
+        var verdict = Assert.Single(store.Verdicts());
+        Assert.Equal(new Change("home", "b", ChangeKind.Added), verdict.Change);
+        Assert.Equal(["toolu_1"], verdict.SuspectToolUseIds);
+        Assert.Equal([new Command("session-1", "toolu_1", 1, 2)], store.Commands());
     }
 
+    // The trust contract: a command can hold a token, so it never reaches the store.
     [Fact]
-    public void Each_call_appends_a_line()
+    public void The_command_never_reaches_the_store()
     {
-        Run(PreToolUse, LogPath);
-        Run(PreToolUse.Replace("PreToolUse", "PostToolUse"), LogPath);
+        Run(Payload("PreToolUse"), (_, _) => Snap("a"));
+        Run(Payload("PostToolUse"), (_, _) => Snap("a", "b"));
 
-        Assert.Equal(2, File.ReadAllLines(LogPath).Length);
+        var stored = string.Concat(Directory.GetFiles(_dir, "tattlebun.db*").Select(f => Encoding.UTF8.GetString(File.ReadAllBytes(f))));
+        Assert.DoesNotContain("fake-token-for-tests", stored);
+        // Positive control: the same scan finds what the store does keep.
+        Assert.Contains("toolu_1", stored);
     }
 
     [Theory]
     [InlineData("")]
     [InlineData("null")]
     [InlineData("not json")]
-    public void Bad_input_still_exits_0(string stdin) => Assert.Equal(0, Run(stdin, LogPath));
+    public void Bad_input_still_exits_0(string stdin) => Assert.Equal(0, Run(stdin, (_, _) => Snap()));
 
     [Fact]
-    public void A_log_it_cannot_write_still_exits_0()
+    public void A_failed_snapshot_still_exits_0() =>
+        Assert.Equal(0, Run(Payload("PreToolUse"), (_, _) => throw new IOException("unreadable")));
+
+    [Fact]
+    public void A_store_it_cannot_open_still_exits_0()
     {
         var blocked = Path.Combine(_dir, "a-file");
         File.WriteAllText(blocked, "");
 
-        Assert.Equal(0, Run(PreToolUse, Path.Combine(blocked, "hook.log")));
+        Assert.Equal(0, HookRun.Run(Stdin(Payload("PreToolUse")), Path.Combine(blocked, "tattlebun.db"), (_, _) => Snap()));
     }
 
     public void Dispose() => Directory.Delete(_dir, recursive: true);
 
-    private static int Run(string stdin, string logPath) =>
-        HookRun.Run(new MemoryStream(Encoding.UTF8.GetBytes(stdin)), logPath);
+    private static string Payload(string hookEvent) =>
+        $$$"""
+        {"session_id":"session-1","transcript_path":"t.jsonl","cwd":"C:\\repo","hook_event_name":"{{{hookEvent}}}",
+         "tool_name":"Bash","tool_use_id":"toolu_1","tool_input":{"command":"{{{Command}}}"}}
+        """;
+
+    private static Snapshot Snap(params string[] homeItems) =>
+        new(DateTimeOffset.UtcNow, new Dictionary<string, Part> { ["home"] = new("s", homeItems.ToDictionary(i => i, _ => "1")) });
+
+    private static MemoryStream Stdin(string text) => new(Encoding.UTF8.GetBytes(text));
+
+    private int Run(string stdin, Func<Fingerprinter, Snapshot?, Snapshot> read) => HookRun.Run(Stdin(stdin), StorePath, read);
 }
