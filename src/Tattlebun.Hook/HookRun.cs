@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Tattlebun.Core;
@@ -35,7 +36,8 @@ public static class HookRun
                         && toolInput.TryGetProperty("file_path", out var file) && file.GetString() is { } path
                         && Path.IsPathFullyQualified(path) && Path.GetFullPath(path) is var full && IsLocal(full) && IsOutside(full, cwd)
                         ? full
-                        : null),
+                        : null,
+                    Process.GetCurrentProcess().StartTime.ToUniversalTime()),
                 read);
         }
         catch (Exception)

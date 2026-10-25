@@ -43,5 +43,25 @@ public class ReceiptListTests
     }
 
     [Fact]
+    public void Timing_reports_the_95th_percentile_and_the_share_under_budget()
+    {
+        double[] times = [.. Enumerable.Range(1, 19).Select(i => (double)i * 5), 250];
+
+        Assert.Equal("20 snapshots: 95% took 95 ms or less, 95% under the 100 ms budget" + Environment.NewLine, ReceiptList.Timing(times));
+    }
+
+    [Fact]
+    public void Control_and_bidi_characters_in_names_are_shown_escaped()
+    {
+        StoredVerdict[] verdicts = [new(2, new Change("home", "\u001b[2Jfake‮txt.exe", ChangeKind.Added), [])];
+
+        var text = ReceiptList.Format([], new Dictionary<string, string>(), verdicts);
+
+        Assert.Contains("\\u001B[2Jfake\\u202Etxt.exe", text);
+        Assert.DoesNotContain('\u001b', text);
+        Assert.DoesNotContain('‮', text);
+    }
+
+    [Fact]
     public void An_empty_store_says_so() => Assert.Equal("No receipts yet." + Environment.NewLine, ReceiptList.Format([], new Dictionary<string, string>(), []));
 }

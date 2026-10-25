@@ -113,7 +113,9 @@ public sealed class SnapshotReader(Fingerprinter fingerprinter, string home, str
     }
 
     // Walks down from the drive root and stops at the first link, so no link is ever followed: each step reads the
-    // attributes of a path whose folders above were already found to be plain.
+    // attributes of a path whose folders above were already found to be plain. A link swapped in between this check
+    // and the read still gets through, but only a hostile agent racing the hook could do that, and it can already
+    // reach any share itself; this keeps a watched path from reaching one at every later snapshot.
     internal static bool HasLink(string path, Dictionary<string, bool> known)
     {
         var parts = path.Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries);

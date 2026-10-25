@@ -17,9 +17,10 @@ namespace Tattlebun.Windows;
 /// For a background command's PostToolUse, Claude Code's other children: its shell is among those that started after the command.
 /// </param>
 /// <param name="WrittenFile">For a Write or Edit call's PreToolUse, its file when that's outside the session's working folder.</param>
+/// <param name="HookStarted">When the hook's process started, in UTC.</param>
 public sealed record HookCall(
     string Event, string Session, string ToolUseId, string Tool, IReadOnlyList<string>? BatchToolUseIds = null,
-    TrackedProcess? Claude = null, IReadOnlyList<TrackedProcess>? BackgroundShells = null, string? WrittenFile = null);
+    TrackedProcess? Claude = null, IReadOnlyList<TrackedProcess>? BackgroundShells = null, string? WrittenFile = null, DateTime? HookStarted = null);
 
 /// <summary>One change found between two snapshots, and the commands that were running while it happened.</summary>
 public sealed record StoredVerdict(long Snapshot, Change Change, IReadOnlyList<string> SuspectToolUseIds);
@@ -45,7 +46,7 @@ public sealed class ReceiptStore : IDisposable
         Execute("""
             PRAGMA journal_mode = WAL;
             CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value BLOB NOT NULL);
-            CREATE TABLE IF NOT EXISTS snapshots (number INTEGER PRIMARY KEY AUTOINCREMENT, taken_utc_ticks INTEGER NOT NULL);
+            CREATE TABLE IF NOT EXISTS snapshots (number INTEGER PRIMARY KEY AUTOINCREMENT, taken_utc_ticks INTEGER NOT NULL, hook_ms REAL);
             CREATE TABLE IF NOT EXISTS commands (
                 tool_use_id TEXT PRIMARY KEY, session TEXT NOT NULL, tool TEXT NOT NULL,
                 start_snapshot INTEGER NOT NULL, end_snapshot INTEGER, claude_pid INTEGER, claude_started INTEGER);
@@ -143,10 +144,24 @@ public sealed class ReceiptStore : IDisposable
         Execute(
             "INSERT INTO meta (key, value) VALUES ('last', $value) ON CONFLICT (key) DO UPDATE SET value = excluded.value",
             ("$value", JsonSerializer.SerializeToUtf8Bytes(new LastSnapshot(number, now), StoreJson.Default.LastSnapshot)));
+
+        // M1's budget is per hook, from the moment its process started, so that's what is kept.
+        if (call.HookStarted is { } started)
+        {
+            Execute("UPDATE snapshots SET hook_ms = $ms WHERE number = $number", ("$ms", (DateTime.UtcNow - started).TotalMilliseconds), ("$number", number));
+        }
+
         transaction.Commit();
     }
 
     public IReadOnlyList<Command> Commands() => Commands("");
+
+    public IReadOnlyList<double> HookTimes()
+    {
+        var times = new List<double>();
+        Each("SELECT hook_ms FROM snapshots WHERE hook_ms IS NOT NULL", row => times.Add(row.GetDouble(0)));
+        return times;
+    }
 
     public IReadOnlyDictionary<string, string> Tools()
     {

@@ -10,7 +10,7 @@ if (args is ["--list"])
     }
 
     using var store = new ReceiptStore(ReceiptStore.DefaultPath);
-    Console.Write(ReceiptList.Format(store.Commands(), store.Tools(), store.Verdicts()));
+    Console.Write(ReceiptList.Format(store.Commands(), store.Tools(), store.Verdicts()) + ReceiptList.Timing(store.HookTimes()));
     return 0;
 }
 
