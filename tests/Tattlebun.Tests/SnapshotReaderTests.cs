@@ -93,6 +93,18 @@ public sealed class SnapshotReaderTests : IDisposable
     }
 
     [Fact]
+    public void A_written_file_is_read_like_a_dotfile()
+    {
+        var reader = TempReader();
+        var file = Path.Combine(_root, "elsewhere", "settings.json");
+        Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+        var before = reader.Read(null, [file]);
+        File.WriteAllText(file, "{}");
+
+        Assert.Equal([new Change($"file|{file}", file, ChangeKind.Added)], Diff.Between(before, reader.Read(before, [file])));
+    }
+
+    [Fact]
     public void Global_npm_packages_are_read_with_their_scopes()
     {
         var reader = TempReader();

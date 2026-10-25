@@ -9,7 +9,7 @@ public static class HookRun
 {
     // Exit code 2 from a PreToolUse hook blocks the tool call, and stdout can be read as a decision,
     // so every path returns 0 and writes nothing to stdout.
-    public static int Run(Stream stdin, string storePath, Func<Fingerprinter, Snapshot?, Snapshot> read)
+    public static int Run(Stream stdin, string storePath, Func<Fingerprinter, Snapshot?, IReadOnlyList<string>, Snapshot> read)
     {
         try
         {
@@ -30,7 +30,11 @@ public static class HookRun
                     input.HookEventName, input.SessionId, input.ToolUseId ?? "", input.ToolName ?? "",
                     [.. input.ToolCalls?.Select(c => c.ToolUseId).OfType<string>() ?? []],
                     claude,
-                    background && claude is not null ? [.. TrackedProcess.ChildrenOf(claude).Where(p => p.Pid != Environment.ProcessId)] : null),
+                    background && claude is not null ? [.. TrackedProcess.ChildrenOf(claude).Where(p => p.Pid != Environment.ProcessId)] : null,
+                    input is { HookEventName: "PreToolUse", ToolName: "Write" or "Edit", Cwd: { } cwd, ToolInput: { ValueKind: JsonValueKind.Object } toolInput }
+                        && toolInput.TryGetProperty("file_path", out var file) && file.GetString() is { } path && IsOutside(path, cwd)
+                        ? Path.GetFullPath(path)
+                        : null),
                 read);
         }
         catch (Exception)
@@ -40,10 +44,15 @@ public static class HookRun
 
         return 0;
     }
+
+    // The trailing separator keeps C:\repo2 from counting as inside C:\repo.
+    public static bool IsOutside(string file, string folder) =>
+        !Path.GetFullPath(file).StartsWith(Path.TrimEndingDirectorySeparator(Path.GetFullPath(folder)) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
 }
 
 internal sealed record HookInput(
-    string? SessionId, string? HookEventName, string? ToolName, string? ToolUseId, IReadOnlyList<BatchCall>? ToolCalls, JsonElement? ToolResponse);
+    string? SessionId, string? HookEventName, string? ToolName, string? ToolUseId, string? Cwd,
+    IReadOnlyList<BatchCall>? ToolCalls, JsonElement? ToolInput, JsonElement? ToolResponse);
 
 internal sealed record BatchCall(string? ToolUseId);
 

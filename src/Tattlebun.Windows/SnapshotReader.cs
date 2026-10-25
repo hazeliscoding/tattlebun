@@ -35,7 +35,8 @@ public sealed class SnapshotReader(Fingerprinter fingerprinter, string home, str
     {
     }
 
-    public Snapshot Read(Snapshot? previous)
+    /// <summary>Reads the watch list, plus <paramref name="writtenFiles"/> that agents wrote outside their folders.</summary>
+    public Snapshot Read(Snapshot? previous, IReadOnlyList<string>? writtenFiles = null)
     {
         var parts = new Dictionary<string, Part>();
 
@@ -90,7 +91,8 @@ public sealed class SnapshotReader(Fingerprinter fingerprinter, string home, str
 
         foreach (var file in Dotfiles.Select(f => Path.Combine(home, f))
             .Concat([Path.Combine(appData, "pip", "pip.ini")])
-            .Concat(new[] { "PowerShell", "WindowsPowerShell" }.SelectMany(shell => new[] { "Microsoft.PowerShell_profile.ps1", "profile.ps1" }.Select(p => Path.Combine(documents, shell, p)))))
+            .Concat(new[] { "PowerShell", "WindowsPowerShell" }.SelectMany(shell => new[] { "Microsoft.PowerShell_profile.ps1", "profile.ps1" }.Select(p => Path.Combine(documents, shell, p))))
+            .Concat(writtenFiles ?? []))
         {
             Add($"file|{file}", () => FileStamp(file), () => FileFingerprint(file));
         }

@@ -16,9 +16,10 @@ namespace Tattlebun.Windows;
 /// <param name="BackgroundShells">
 /// For a background command's PostToolUse, Claude Code's other children: its shell is among those that started after the command.
 /// </param>
+/// <param name="WrittenFile">For a Write or Edit call's PreToolUse, its file when that's outside the session's working folder.</param>
 public sealed record HookCall(
     string Event, string Session, string ToolUseId, string Tool, IReadOnlyList<string>? BatchToolUseIds = null,
-    TrackedProcess? Claude = null, IReadOnlyList<TrackedProcess>? BackgroundShells = null);
+    TrackedProcess? Claude = null, IReadOnlyList<TrackedProcess>? BackgroundShells = null, string? WrittenFile = null);
 
 /// <summary>One change found between two snapshots, and the commands that were running while it happened.</summary>
 public sealed record StoredVerdict(long Snapshot, Change Change, IReadOnlyList<string> SuspectToolUseIds);
@@ -52,6 +53,7 @@ public sealed class ReceiptStore : IDisposable
                 id INTEGER PRIMARY KEY AUTOINCREMENT, snapshot INTEGER NOT NULL, part TEXT NOT NULL, name TEXT NOT NULL, kind INTEGER NOT NULL);
             CREATE TABLE IF NOT EXISTS suspects (change_id INTEGER NOT NULL, tool_use_id TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS background_shells (tool_use_id TEXT NOT NULL, pid INTEGER NOT NULL, started INTEGER NOT NULL);
+            CREATE TABLE IF NOT EXISTS written_files (path TEXT PRIMARY KEY COLLATE NOCASE);
             """);
     }
 
@@ -59,7 +61,7 @@ public sealed class ReceiptStore : IDisposable
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Tattlebun", "tattlebun.db");
 
     /// <summary>Takes a snapshot with <paramref name="read"/>, records what changed since the last one, and opens or closes the call's command.</summary>
-    public void Record(HookCall call, Func<Fingerprinter, Snapshot?, Snapshot> read)
+    public void Record(HookCall call, Func<Fingerprinter, Snapshot?, IReadOnlyList<string>, Snapshot> read)
     {
         // Deferred is false, so this is BEGIN IMMEDIATE: the write lock is taken before the snapshot is read.
         using var transaction = _db.BeginTransaction(deferred: false);
@@ -72,7 +74,17 @@ public sealed class ReceiptStore : IDisposable
 
         var fingerprinter = new Fingerprinter(FingerprintKey());
         var (previous, previousNumber) = LastSnapshot();
-        var now = read(fingerprinter, previous);
+
+        // A file an agent writes outside its folder joins the watch list before this snapshot, which becomes its
+        // baseline, so the call's PostToolUse finds what it did to it. It stays watched after that.
+        if (call.WrittenFile is not null)
+        {
+            Execute("INSERT OR IGNORE INTO written_files (path) VALUES ($path)", ("$path", call.WrittenFile));
+        }
+
+        var written = new List<string>();
+        Each("SELECT path FROM written_files ORDER BY path", row => written.Add(row.GetString(0)));
+        var now = read(fingerprinter, previous, written);
         var number = Scalar<long>("INSERT INTO snapshots (taken_utc_ticks) VALUES ($taken) RETURNING number", ("$taken", now.Taken.UtcTicks));
 
         // The commands of a session that died end at this snapshot, the first to notice.

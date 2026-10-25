@@ -14,7 +14,7 @@ public sealed class ReceiptStoreTests : IDisposable
     public void The_first_snapshot_is_a_baseline_with_no_changes()
     {
         using var store = new ReceiptStore(StorePath);
-        store.Record(Call("PreToolUse", "s1", "a"), (_, _) => Snap("x", "y"));
+        store.Record(Call("PreToolUse", "s1", "a"), (_, _, _) => Snap("x", "y"));
 
         Assert.Empty(store.Verdicts());
     }
@@ -23,10 +23,10 @@ public sealed class ReceiptStoreTests : IDisposable
     public void Overlapping_commands_from_two_sessions_both_get_one_of_these()
     {
         using var store = new ReceiptStore(StorePath);
-        store.Record(Call("PreToolUse", "s1", "a"), (_, _) => Snap());
-        store.Record(Call("PreToolUse", "s2", "b"), (_, _) => Snap());
-        store.Record(Call("PostToolUse", "s2", "b"), (_, _) => Snap("npm-package"));
-        store.Record(Call("PostToolUse", "s1", "a"), (_, _) => Snap("npm-package"));
+        store.Record(Call("PreToolUse", "s1", "a"), (_, _, _) => Snap());
+        store.Record(Call("PreToolUse", "s2", "b"), (_, _, _) => Snap());
+        store.Record(Call("PostToolUse", "s2", "b"), (_, _, _) => Snap("npm-package"));
+        store.Record(Call("PostToolUse", "s1", "a"), (_, _, _) => Snap("npm-package"));
 
         var verdict = Assert.Single(store.Verdicts());
         Assert.Equal(["a", "b"], verdict.SuspectToolUseIds);
@@ -36,9 +36,9 @@ public sealed class ReceiptStoreTests : IDisposable
     public void A_change_after_every_command_ended_is_not_tied_to_a_session()
     {
         using var store = new ReceiptStore(StorePath);
-        store.Record(Call("PreToolUse", "s1", "a"), (_, _) => Snap());
-        store.Record(Call("PostToolUse", "s1", "a"), (_, _) => Snap());
-        store.Record(Call("PreToolUse", "s1", "b"), (_, _) => Snap("startup-entry"));
+        store.Record(Call("PreToolUse", "s1", "a"), (_, _, _) => Snap());
+        store.Record(Call("PostToolUse", "s1", "a"), (_, _, _) => Snap());
+        store.Record(Call("PreToolUse", "s1", "b"), (_, _, _) => Snap("startup-entry"));
 
         Assert.Empty(Assert.Single(store.Verdicts()).SuspectToolUseIds);
     }
@@ -50,7 +50,7 @@ public sealed class ReceiptStoreTests : IDisposable
         Parallel.For(0, 12, i =>
         {
             using var store = new ReceiptStore(StorePath);
-            store.Record(Call("PreToolUse", $"s{i}", $"t{i}"), (_, _) => Snap($"item{i}"));
+            store.Record(Call("PreToolUse", $"s{i}", $"t{i}"), (_, _, _) => Snap($"item{i}"));
         });
 
         using var check = new ReceiptStore(StorePath);
@@ -64,12 +64,12 @@ public sealed class ReceiptStoreTests : IDisposable
         string? first = null, second = null;
         using (var store = new ReceiptStore(StorePath))
         {
-            store.Record(Call("PreToolUse", "s1", "a"), (f, _) => { first = f.Of(value); return Snap(); });
+            store.Record(Call("PreToolUse", "s1", "a"), (f, _, _) => { first = f.Of(value); return Snap(); });
         }
 
         using (var store = new ReceiptStore(StorePath))
         {
-            store.Record(Call("PreToolUse", "s1", "b"), (f, _) => { second = f.Of(value); return Snap(); });
+            store.Record(Call("PreToolUse", "s1", "b"), (f, _, _) => { second = f.Of(value); return Snap(); });
         }
 
         Assert.Equal(first, second);
@@ -80,9 +80,9 @@ public sealed class ReceiptStoreTests : IDisposable
     public void PostToolBatch_closes_a_call_that_never_got_PostToolUse()
     {
         using var store = new ReceiptStore(StorePath);
-        store.Record(Call("PreToolUse", "s1", "denied"), (_, _) => Snap());
-        store.Record(new HookCall("PostToolBatch", "s1", "", "", ["denied"]), (_, _) => throw new InvalidOperationException("takes no snapshot"));
-        store.Record(Call("PreToolUse", "s1", "next"), (_, _) => Snap("made-by-someone-else"));
+        store.Record(Call("PreToolUse", "s1", "denied"), (_, _, _) => Snap());
+        store.Record(new HookCall("PostToolBatch", "s1", "", "", ["denied"]), (_, _, _) => throw new InvalidOperationException("takes no snapshot"));
+        store.Record(Call("PreToolUse", "s1", "next"), (_, _, _) => Snap("made-by-someone-else"));
 
         Assert.Equal(new Command("s1", "denied", 1, 1), store.Commands()[0]);
         Assert.Empty(Assert.Single(store.Verdicts()).SuspectToolUseIds);
@@ -92,9 +92,9 @@ public sealed class ReceiptStoreTests : IDisposable
     public void UserPromptSubmit_closes_only_that_sessions_open_commands()
     {
         using var store = new ReceiptStore(StorePath);
-        store.Record(Call("PreToolUse", "s1", "interrupted"), (_, _) => Snap());
-        store.Record(Call("PreToolUse", "s2", "running"), (_, _) => Snap());
-        store.Record(new HookCall("UserPromptSubmit", "s1", "", ""), (_, _) => throw new InvalidOperationException("takes no snapshot"));
+        store.Record(Call("PreToolUse", "s1", "interrupted"), (_, _, _) => Snap());
+        store.Record(Call("PreToolUse", "s2", "running"), (_, _, _) => Snap());
+        store.Record(new HookCall("UserPromptSubmit", "s1", "", ""), (_, _, _) => throw new InvalidOperationException("takes no snapshot"));
 
         Assert.Equal([new Command("s1", "interrupted", 1, 2), new Command("s2", "running", 2, null)], store.Commands());
     }
@@ -105,12 +105,32 @@ public sealed class ReceiptStoreTests : IDisposable
     {
         var dead = new TrackedProcess(111, 5);
         using var store = new ReceiptStore(StorePath, isAlive: claude => claude != dead);
-        store.Record(Call("PreToolUse", "s1", "install") with { Claude = dead }, (_, _) => Snap());
-        store.Record(Call("PreToolUse", "s2", "test") with { Claude = new TrackedProcess(222, 6) }, (_, _) => Snap("during-install"));
-        store.Record(Call("PostToolUse", "s2", "test"), (_, _) => Snap("during-install", "after-it-died"));
+        store.Record(Call("PreToolUse", "s1", "install") with { Claude = dead }, (_, _, _) => Snap());
+        store.Record(Call("PreToolUse", "s2", "test") with { Claude = new TrackedProcess(222, 6) }, (_, _, _) => Snap("during-install"));
+        store.Record(Call("PostToolUse", "s2", "test"), (_, _, _) => Snap("during-install", "after-it-died"));
 
         Assert.Equal(new Command("s1", "install", 1, 2), store.Commands()[0]);
         Assert.Equal([["install"], ["test"]], store.Verdicts().Select(v => v.SuspectToolUseIds));
+    }
+
+    [Fact]
+    public void A_written_file_lands_on_its_calls_receipt_and_stays_watched()
+    {
+        const string file = @"C:\Users\me\.bashrc";
+        var fingerprint = "v1";
+        Snapshot Read(IReadOnlyList<string> written) =>
+            new(DateTimeOffset.UtcNow, written.ToDictionary(f => $"file|{f}", f => new Part(fingerprint, new Dictionary<string, string> { [f] = fingerprint })));
+        using var store = new ReceiptStore(StorePath);
+
+        store.Record(Call("PreToolUse", "s1", "write") with { WrittenFile = file }, (_, _, written) => Read(written));
+        fingerprint = "v2";
+        store.Record(Call("PostToolUse", "s1", "write"), (_, _, written) => Read(written));
+        fingerprint = "v3";
+        store.Record(Call("PreToolUse", "s1", "later"), (_, _, written) => Read(written));
+
+        Assert.Equal(
+            [(new Change($"file|{file}", file, ChangeKind.Changed), new[] { "write" }), (new Change($"file|{file}", file, ChangeKind.Changed), Array.Empty<string>())],
+            store.Verdicts().Select(v => (v.Change, v.SuspectToolUseIds.ToArray())));
     }
 
     [Fact]
@@ -118,18 +138,18 @@ public sealed class ReceiptStoreTests : IDisposable
     {
         var running = new HashSet<TrackedProcess>();
         using var store = new ReceiptStore(StorePath, isAlive: running.Contains);
-        store.Record(Call("PreToolUse", "s1", "dev-server"), (_, _) => Snap());
+        store.Record(Call("PreToolUse", "s1", "dev-server"), (_, _, _) => Snap());
         var shell = new TrackedProcess(333, DateTime.UtcNow.Ticks);
         running.Add(shell);
-        store.Record(Call("PostToolUse", "s1", "dev-server") with { BackgroundShells = [shell] }, (_, _) => Snap());
-        store.Record(new HookCall("PostToolBatch", "s1", "", "", ["dev-server"]), (_, _) => Snap());
-        store.Record(new HookCall("UserPromptSubmit", "s1", "", ""), (_, _) => Snap());
-        store.Record(Call("PreToolUse", "s1", "test"), (_, _) => Snap("while-the-server-ran"));
+        store.Record(Call("PostToolUse", "s1", "dev-server") with { BackgroundShells = [shell] }, (_, _, _) => Snap());
+        store.Record(new HookCall("PostToolBatch", "s1", "", "", ["dev-server"]), (_, _, _) => Snap());
+        store.Record(new HookCall("UserPromptSubmit", "s1", "", ""), (_, _, _) => Snap());
+        store.Record(Call("PreToolUse", "s1", "test"), (_, _, _) => Snap("while-the-server-ran"));
 
         Assert.Null(store.Commands().Single(c => c.ToolUseId == "dev-server").EndSnapshot);
 
         running.Remove(shell);
-        store.Record(Call("PostToolUse", "s1", "test"), (_, _) => Snap("while-the-server-ran"));
+        store.Record(Call("PostToolUse", "s1", "test"), (_, _, _) => Snap("while-the-server-ran"));
 
         Assert.Equal(4, store.Commands().Single(c => c.ToolUseId == "dev-server").EndSnapshot);
         Assert.Equal(["dev-server"], store.Verdicts().Single().SuspectToolUseIds);
@@ -141,8 +161,8 @@ public sealed class ReceiptStoreTests : IDisposable
     {
         var mcpServer = new TrackedProcess(444, DateTime.UtcNow.AddMinutes(-5).Ticks);
         using var store = new ReceiptStore(StorePath, isAlive: _ => true);
-        store.Record(Call("PreToolUse", "s1", "bg"), (_, _) => Snap());
-        store.Record(Call("PostToolUse", "s1", "bg") with { BackgroundShells = [mcpServer] }, (_, _) => Snap());
+        store.Record(Call("PreToolUse", "s1", "bg"), (_, _, _) => Snap());
+        store.Record(Call("PostToolUse", "s1", "bg") with { BackgroundShells = [mcpServer] }, (_, _, _) => Snap());
 
         Assert.Equal(2, store.Commands().Single().EndSnapshot);
     }
