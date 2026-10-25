@@ -44,6 +44,10 @@ Claude's calls, approved by the owner with the design:
 - **Tilly Stubbs is the mascot, beside the placeholder mark.** The owner's call. She is a front-desk clerk who notices every little change and tells you exactly what happened, fairly and kindly: the mark's bunny-over-a-receipt as a person, drawn in the owner's anime-pipeline. Receipts say "while", not "by", so she tells and never accuses. She appears in the README, in `docs/brand/tilly/` and in launch posts; whether her psst sticker goes on M2's notification is decided when M2 starts. The bunny mark stays the logo and the tray icon, and the real logo is still an owner item. Her art was drawn with an AI image model, and it is Apache-2.0 like the code; the README says both. Her one-of-these sticker stays out, because its see-through gaps show a dark page through it. Her cardigan (`#507DBF`) stays as drawn, near the mark's cornflower, rather than retinting her. This gives up a single mark, a sticker for "one of these" for now, and exclusive rights to her art: anyone may reuse or change it.
 - **Updates apply on their own, as in Sweepling.** The owner's call. Velopack in the tray app checks GitHub Releases a minute after it starts and every 4 hours after, downloads in the background, and restarts into the update only while the review window is closed, so it never cuts off an undo. A tick in the tray menu turns it off, and a build run from source never checks. The update check is the only network call: Tattlebun's own code never references a networking assembly, and the hook doesn't reference Velopack, so a snapshot never touches the network. No telemetry. This gives up the strictest promise, no network code at all, and some size: Velopack and its HTTP stack grew Sweepling's exe from 19.9 to 25.6 MB.
 - **No portable copy, as in Sweepling.** The owner's call. Velopack's per-user Setup is the only download. A copy that can't update itself would miss fixes. This gives up a zip for people who won't run an installer.
+- **The snapshot around each command stands.** The M1 spike read the watch list, scheduled tasks aside, in 8-20 ms. See the spike's results under M1.
+- **The hooks run in exec form.** Claude's call from the spike. Claude Code runs a command hook through Git Bash unless the hook lists `args`, and Git Bash added about 120 ms to each call, more than the whole budget. With `command` set to `tattlebun-hook.exe` and `args` listed, Claude Code starts the exe directly. This gives up shell syntax in the hook command, which the hook doesn't need.
+- **The tray app lists scheduled tasks, not the hook.** The owner's call. Unelevated, the Task Scheduler's COM API is the only way to read them (its registry cache and `System32\Tasks` deny access), and a listing took 115-150 ms. The tray app lists them every minute, and a new task goes to the command that ran since the last listing, to "one of these" when several did, or to "not tied to a session". This gives up blame as sharp as the other changes get.
+- **Claude Code's own files are ignored.** Claude's call from the spike. Claude Code writes `.claude.json.lock` and `.claude.json.tmp.*` at the top of the home folder while commands run, and receipts would blame agents for them. This gives up seeing those files change, which only Claude Code does.
 
 ## M0: Placeholder (as soon as possible)
 
@@ -66,17 +70,25 @@ Claude's calls, approved by the owner with the design:
 
 ## M1: Receipts
 
-- [ ] **Spike:** a throwaway PowerShell hook in a scratch project that snapshots around each command and logs the diff and the time, run through one real agent session. Record what changed and how long snapshots took on the owner's PC. If they can't stay under 100 ms, reopen the per-command decision before building on it.
-- [ ] Snapshot readers for each item on the watch list, reading the registry and disk directly and skipping parts whose last-write time hasn't changed.
+- [x] **Spike:** a throwaway PowerShell hook in a scratch project that snapshots around each command and logs the diff and the time, run through one real agent session. Record what changed and how long snapshots took on the owner's PC. If they can't stay under 100 ms, reopen the per-command decision before building on it.
+- [ ] Snapshot readers for each item on the watch list, reading the registry and disk directly and skipping parts whose last-write time hasn't changed. Under nvm-windows, npm's global packages are in `%NVM_SYMLINK%\node_modules`, not `%APPDATA%\npm`.
+- [ ] The tray app lists scheduled tasks through the Task Scheduler's COM API every minute, and blames a new or removed task by the interval since its last listing.
 - [ ] Blame by interval in `Tattlebun.Core`, with tests for one command, two overlapping commands, no command, and a session that died mid-command.
 - [ ] Close the interval of a session that died: when the Claude Code process its hook saw (`CLAUDE_PID`) is gone.
 - [ ] Settle background commands. A `run_in_background` command keeps running after its `PostToolUse`, so its later changes could land on another session's command. Try keeping its interval open while its processes live, found by `CLAUDE_CODE_SESSION_ID` in their environment, as Sweepling does.
 - [ ] Record the path of each Write and Edit call outside the session's working folder.
 - [ ] Receipts and the last snapshot in SQLite (WAL), safe with parallel hooks.
-- [ ] A Claude Code plugin in this repo whose hooks run `tattlebun-hook` for Bash, PowerShell, Write and Edit.
+- [ ] A Claude Code plugin in this repo whose hooks run `tattlebun-hook` in exec form for Bash, PowerShell, Write and Edit.
 - [ ] `tattlebun-hook --list` prints recent receipts, for checking before the window exists.
 
 **Done when:** in a real session, `npm i -g` of a small package shows up on its command's receipt; a command that changes nothing gets an empty receipt; overlapping commands from two sessions both get "one of these"; and over 200 commands on the owner's PC, 95% of snapshots take under 100 ms.
+
+**Spike results (2026-10-25).** The hook was a throwaway C# exe published with NativeAOT, not PowerShell: in PowerShell the same snapshot took 560-745 ms, mostly PowerShell itself, which says nothing about the native hook. A headless Claude Code session (2.1.310) ran a no-op, set a user variable, added an `HKCU` Run entry, ran `npm i -g`, wrote a file at the top of the home folder, and undid each. Every change landed on the receipt of the command that made it, and the no-op's receipt was empty.
+- Reading the watch list without scheduled tasks (1,360 items: variables, uninstall keys, packages, startup entries, 801 services, dotfiles and the top of the home folder) took 8-20 ms inside the process. Diffing against a text file took another 13-54 ms; SQLite and skipping unchanged parts replace that.
+- From process start to the last log line, calls took 64-88 ms in exec form after a cold first call of 322 ms. Timed from outside under the same load, the near-empty `tattlebun-hook` took a median of 28 ms, so starting the process is most of the cost.
+- Through Git Bash the same call took a median of 194 ms against 75 ms direct, with none of 40 under 100 ms. Hence exec form, under Decisions (2026-10-25).
+- Clearing a variable with `[Environment]::SetEnvironmentVariable(name, $null, 'User')` in PowerShell left it set to an empty string, because PowerShell passes `$null` to a string parameter as `""`. The receipt said "changed", not "removed", which was right. Tests delete a value with `Remove-ItemProperty` or the registry API instead.
+- Two overlapping commands weren't tested: the agent ran the parallel step one call at a time. Blame tests on made-up intervals cover it.
 
 ## M2: Review window
 
