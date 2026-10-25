@@ -18,9 +18,13 @@ namespace Tattlebun.Windows;
 /// </param>
 /// <param name="WrittenFile">For a Write or Edit call's PreToolUse, its file when that's outside the session's working folder.</param>
 /// <param name="HookStarted">When the hook's process started, in UTC.</param>
+/// <param name="ReadSince">
+/// The latest snapshot before the parts were read, when they were read outside the store's lock; their next reading is judged from there.
+/// </param>
 public sealed record HookCall(
     string Event, string Session, string ToolUseId, string Tool, IReadOnlyList<string>? BatchToolUseIds = null,
-    TrackedProcess? Claude = null, IReadOnlyList<TrackedProcess>? BackgroundShells = null, string? WrittenFile = null, DateTime? HookStarted = null);
+    TrackedProcess? Claude = null, IReadOnlyList<TrackedProcess>? BackgroundShells = null, string? WrittenFile = null, DateTime? HookStarted = null,
+    long? ReadSince = null);
 
 /// <summary>One change found between two snapshots, and the commands that were running while it happened.</summary>
 public sealed record StoredVerdict(long Snapshot, Change Change, IReadOnlyList<string> SuspectToolUseIds);
@@ -156,7 +160,7 @@ public sealed class ReceiptStore : IDisposable
             }
         }
 
-        var lastRead = parts.Keys.ToDictionary(name => name, name => now.Parts.ContainsKey(name) ? number : readAt.GetValueOrDefault(name, previousNumber));
+        var lastRead = parts.Keys.ToDictionary(name => name, name => now.Parts.ContainsKey(name) ? call.ReadSince ?? number : readAt.GetValueOrDefault(name, previousNumber));
         Execute(
             "INSERT INTO meta (key, value) VALUES ('last', $value) ON CONFLICT (key) DO UPDATE SET value = excluded.value",
             ("$value", JsonSerializer.SerializeToUtf8Bytes(new LastSnapshot(number, now with { Parts = parts }, lastRead), StoreJson.Default.LastSnapshot)));
@@ -171,6 +175,19 @@ public sealed class ReceiptStore : IDisposable
     }
 
     public IReadOnlyList<Command> Commands() => Commands("");
+
+    public long LatestSnapshot() => Scalar<long>("SELECT coalesce(max(number), 0) FROM snapshots");
+
+    // Tasks are listed outside the store's lock, which would otherwise hold every hook for the 100 ms or more a
+    // listing takes. The listing counts as read since the latest snapshot before it began.
+    public void RecordScheduledTasks(Func<Dictionary<string, string>> list)
+    {
+        var since = LatestSnapshot();
+        var tasks = new Part("", list());
+        Record(
+            new HookCall("ScheduledTasks", "", "", "", ReadSince: since),
+            (_, _, _) => new Snapshot(DateTimeOffset.UtcNow, new Dictionary<string, Part> { ["tasks"] = tasks }));
+    }
 
     public IReadOnlyList<double> HookTimes()
     {

@@ -1,5 +1,14 @@
 CloseHandle
+CoCreateInstance
+CoInitializeEx
+CoUninitialize
 CreateToolhelp32Snapshot
+IRegisteredTask
+IRegisteredTaskCollection
+ITaskFolder
+ITaskFolderCollection
+ITaskService
 Process32FirstW
 Process32NextW
 RegQueryInfoKey
+TaskScheduler
