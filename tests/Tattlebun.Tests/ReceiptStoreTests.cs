@@ -134,6 +134,21 @@ public sealed class ReceiptStoreTests : IDisposable
     }
 
     [Fact]
+    public void Only_the_most_recently_written_files_stay_watched()
+    {
+        IReadOnlyList<string> watched = [];
+        using var store = new ReceiptStore(StorePath);
+        for (var i = 0; i <= ReceiptStore.WrittenFileCap; i++)
+        {
+            store.Record(Call("PreToolUse", "s1", $"w{i}") with { WrittenFile = $@"C:\out\{i}.txt" }, (_, _, written) => { watched = written; return Snap(); });
+        }
+
+        Assert.Equal(ReceiptStore.WrittenFileCap, watched.Count);
+        Assert.DoesNotContain(@"C:\out\0.txt", watched);
+        Assert.Contains($@"C:\out\{ReceiptStore.WrittenFileCap}.txt", watched);
+    }
+
+    [Fact]
     public void A_background_command_stays_open_until_its_shell_exits()
     {
         var running = new HashSet<TrackedProcess>();

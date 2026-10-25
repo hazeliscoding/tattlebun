@@ -46,6 +46,25 @@ public sealed class HookTests : IDisposable
     public void A_file_counts_as_outside_the_folder_only_when_it_is(string file, bool outside) =>
         Assert.Equal(outside, HookRun.IsOutside(file, @"C:\repo"));
 
+    [Theory]
+    [InlineData(@"\\server\share\.bashrc")]
+    [InlineData(@"\\?\C:\Users\me\.bashrc")]
+    [InlineData(@"\\.\PhysicalDrive0")]
+    [InlineData(@"C:\Users\me\CON")]
+    [InlineData(@"relative\.bashrc")]
+    public void A_path_that_isnt_a_plain_local_file_is_never_watched(string path)
+    {
+        IReadOnlyList<string>? watched = null;
+        var payload = $$$"""
+            {"session_id":"session-1","cwd":"C:\\repo","hook_event_name":"PreToolUse","tool_name":"Write","tool_use_id":"toolu_w",
+             "tool_input":{"file_path":{{{System.Text.Json.JsonSerializer.Serialize(path)}}}}}
+            """;
+
+        Run(payload, (_, _, written) => { watched = written; return Snap(); });
+
+        Assert.Empty(watched!);
+    }
+
     [Fact]
     public void A_Write_outside_the_folder_puts_its_file_on_the_watch_list()
     {

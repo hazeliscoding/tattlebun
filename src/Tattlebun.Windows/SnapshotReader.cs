@@ -91,10 +91,16 @@ public sealed class SnapshotReader(Fingerprinter fingerprinter, string home, str
 
         foreach (var file in Dotfiles.Select(f => Path.Combine(home, f))
             .Concat([Path.Combine(appData, "pip", "pip.ini")])
-            .Concat(new[] { "PowerShell", "WindowsPowerShell" }.SelectMany(shell => new[] { "Microsoft.PowerShell_profile.ps1", "profile.ps1" }.Select(p => Path.Combine(documents, shell, p))))
-            .Concat(writtenFiles ?? []))
+            .Concat(new[] { "PowerShell", "WindowsPowerShell" }.SelectMany(shell => new[] { "Microsoft.PowerShell_profile.ps1", "profile.ps1" }.Select(p => Path.Combine(documents, shell, p)))))
         {
             Add($"file|{file}", () => FileStamp(file), () => FileFingerprint(file));
+        }
+
+        // An agent chose these paths. One that has become a link could lead anywhere, even to a network share, so
+        // it's left out rather than followed.
+        foreach (var file in writtenFiles ?? [])
+        {
+            Add($"file|{file}", () => new FileInfo(file) is { Exists: true } info && info.Attributes.HasFlag(FileAttributes.ReparsePoint) ? throw new IOException("a link") : FileStamp(file), () => FileFingerprint(file));
         }
 
         return new Snapshot(DateTimeOffset.UtcNow, parts);
@@ -220,6 +226,10 @@ public sealed class SnapshotReader(Fingerprinter fingerprinter, string home, str
             return [];
         }
 
-        return new() { [file] = info.Length > LargeFile ? $"{info.Length}|{info.LastWriteTimeUtc.Ticks}" : fingerprinter.Of(File.ReadAllBytes(file)) };
+        // The read stops past the cap even if the file grew since its size was checked.
+        using var stream = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        var buffer = new byte[Math.Min(info.Length, LargeFile) + 1];
+        var read = stream.ReadAtLeast(buffer, buffer.Length, throwOnEndOfStream: false);
+        return new() { [file] = read > LargeFile ? $"{info.Length}|{info.LastWriteTimeUtc.Ticks}" : fingerprinter.Of(buffer.AsSpan(0, read)) };
     }
 }

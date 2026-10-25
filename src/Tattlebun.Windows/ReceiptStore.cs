@@ -53,9 +53,11 @@ public sealed class ReceiptStore : IDisposable
                 id INTEGER PRIMARY KEY AUTOINCREMENT, snapshot INTEGER NOT NULL, part TEXT NOT NULL, name TEXT NOT NULL, kind INTEGER NOT NULL);
             CREATE TABLE IF NOT EXISTS suspects (change_id INTEGER NOT NULL, tool_use_id TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS background_shells (tool_use_id TEXT NOT NULL, pid INTEGER NOT NULL, started INTEGER NOT NULL);
-            CREATE TABLE IF NOT EXISTS written_files (path TEXT PRIMARY KEY COLLATE NOCASE);
+            CREATE TABLE IF NOT EXISTS written_files (path TEXT PRIMARY KEY COLLATE NOCASE, written_snapshot INTEGER NOT NULL);
             """);
     }
+
+    public const int WrittenFileCap = 200;
 
     public static string DefaultPath { get; } = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Tattlebun", "tattlebun.db");
@@ -76,10 +78,17 @@ public sealed class ReceiptStore : IDisposable
         var (previous, previousNumber) = LastSnapshot();
 
         // A file an agent writes outside its folder joins the watch list before this snapshot, which becomes its
-        // baseline, so the call's PostToolUse finds what it did to it. It stays watched after that.
+        // baseline, so the call's PostToolUse finds what it did to it. It stays watched after that, among the
+        // most recent few hundred, so the list can't grow without end.
         if (call.WrittenFile is not null)
         {
-            Execute("INSERT OR IGNORE INTO written_files (path) VALUES ($path)", ("$path", call.WrittenFile));
+            Execute(
+                """
+                INSERT INTO written_files (path, written_snapshot) VALUES ($path, $previous + 1)
+                ON CONFLICT (path) DO UPDATE SET written_snapshot = excluded.written_snapshot;
+                DELETE FROM written_files WHERE path NOT IN (SELECT path FROM written_files ORDER BY written_snapshot DESC, path LIMIT $cap);
+                """,
+                ("$path", call.WrittenFile), ("$previous", previousNumber), ("$cap", WrittenFileCap));
         }
 
         var written = new List<string>();

@@ -32,8 +32,9 @@ public static class HookRun
                     claude,
                     background && claude is not null ? [.. TrackedProcess.ChildrenOf(claude).Where(p => p.Pid != Environment.ProcessId)] : null,
                     input is { HookEventName: "PreToolUse", ToolName: "Write" or "Edit", Cwd: { } cwd, ToolInput: { ValueKind: JsonValueKind.Object } toolInput }
-                        && toolInput.TryGetProperty("file_path", out var file) && file.GetString() is { } path && IsOutside(path, cwd)
-                        ? Path.GetFullPath(path)
+                        && toolInput.TryGetProperty("file_path", out var file) && file.GetString() is { } path
+                        && Path.IsPathFullyQualified(path) && Path.GetFullPath(path) is var full && IsLocal(full) && IsOutside(full, cwd)
+                        ? full
                         : null),
                 read);
         }
@@ -44,6 +45,19 @@ public static class HookRun
 
         return 0;
     }
+
+    // A written file is read at every snapshot after, so only a plain path on a local fixed drive is kept. A UNC path,
+    // a \\?\ or \\.\ device path (CON resolves to \\.\CON) or a mapped network drive would make each hook reach the
+    // network, which could leak the user's NTLM hash and stall the agent.
+    public static bool IsLocal(string fullPath) =>
+        fullPath.Length > 3 && char.IsAsciiLetter(fullPath[0]) && fullPath[1] == ':' && fullPath[2] == '\\'
+        && !DeviceNames.Contains(Path.GetFileNameWithoutExtension(fullPath).TrimEnd(' ', '.'))
+        && new DriveInfo(fullPath[..3]).DriveType == DriveType.Fixed;
+
+    // Windows 10 still opens these as devices in any folder, and reading CON would wait on the console.
+    private static readonly HashSet<string> DeviceNames = new(
+        ["CON", "PRN", "AUX", "NUL", "CONIN$", "CONOUT$", .. Enumerable.Range(0, 10).SelectMany(n => new[] { $"COM{n}", $"LPT{n}" }), "COM¹", "COM²", "COM³", "LPT¹", "LPT²", "LPT³"],
+        StringComparer.OrdinalIgnoreCase);
 
     // The trailing separator keeps C:\repo2 from counting as inside C:\repo.
     public static bool IsOutside(string file, string folder) =>
