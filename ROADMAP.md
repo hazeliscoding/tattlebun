@@ -55,7 +55,7 @@ Claude's calls, approved by the owner with the design:
 - [x] A tray icon made from the mark, with Quit. No window yet. Load Avalonia's Fluent theme, or the tray menu opens empty (Staypaw's fix).
 - [x] `tattlebun-hook` reads the hook's JSON from stdin, appends one line to a log and exits 0. Nothing else yet. The line holds the event, session, tool and tool call ID, never the command.
 - [x] Design tokens: a spacing scale, a type scale, a palette with shades and a few shadow levels.
-- [ ] NativeAOT publish for `win-x64` of both programs, with no trim or AOT warnings.
+- [x] NativeAOT publish for `win-x64` of both programs, with no trim or AOT warnings. On 2026-10-25: `tattlebun-hook.exe` is 2.4 MB and ran a sample `PreToolUse` in 23-33 ms, with PowerShell's pipe included; `Tattlebun.exe` is 17.6 MB and idles in the tray at 39.5 MB working set and 13.8 MB private bytes.
 - [ ] Guardrail tests, each with a positive control: `Tattlebun.Core` references neither Avalonia nor any Win32 interop, Tattlebun's own code references no networking assembly, and only the tray app references Velopack.
 - [ ] CI on Windows: build, test, and secret scanning with the gitleaks release binary, checked against its published checksum and run with `--log-opts="--full-history HEAD"`.
 

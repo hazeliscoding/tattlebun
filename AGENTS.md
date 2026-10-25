@@ -64,6 +64,8 @@ One meaning per term. Use these words in code, docs and commits.
 
 - `uv run --no-project --with fonttools --with uharfbuzz python -I scripts/make_lockup.py <Fredoka-SemiBold.ttf> docs/brand` rebuilds the lockups. Its header says where to get the font.
 - `dotnet run scripts/make-icons.cs` rebuilds `docs/brand/tattlebun.ico` from the mark.
+- `dotnet publish src/Tattlebun.Desktop -c Release -r win-x64 -o publish/Tattlebun.Desktop` builds the native tray exe, and the same with `src/Tattlebun.Hook` builds `tattlebun-hook.exe`. It needs Visual Studio's C++ workload. If linking fails with "'vswhere.exe' is not recognized", put `%ProgramFiles(x86)%\Microsoft Visual Studio\Installer` on `PATH`: VS 18's `vcvarsall.bat` calls `vswhere.exe` by bare name, and the error text lands in the linker path.
+- `dotnet test --solution Tattlebun.slnx` runs the tests.
 
 ## Working style
 
