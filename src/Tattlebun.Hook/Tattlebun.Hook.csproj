@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Tattlebun.Hook</RootNamespace>
+    <AssemblyName>tattlebun-hook</AssemblyName>
+    <AssemblyTitle>Tattlebun hook</AssemblyTitle>
+    <ApplicationIcon>..\..\docs\brand\tattlebun.ico</ApplicationIcon>
+    <PublishAot>true</PublishAot>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Tattlebun.Core\Tattlebun.Core.csproj" />
+    <ProjectReference Include="..\Tattlebun.Windows\Tattlebun.Windows.csproj" />
+  </ItemGroup>
+
+</Project>

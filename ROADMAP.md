@@ -50,9 +50,9 @@ Claude's calls, approved by the owner with the design:
 - [x] Add the placeholder mark and its lockups to `docs/brand/`.
 - [ ] Search trademarks for Tattlebun: USPTO. *(owner)*
 - [x] The bunny mascot: Tilly Stubbs, from anime-pipeline, in `docs/brand/tilly/` and the README.
-- [ ] Pick the real logo in a claude.ai design project, perhaps drawn from Tilly's bunny-head pin, and export `mark.svg` with a `-dark` variant. `scripts/make_lockup.py` rebuilds the lockups from it. *(owner)*
-- [ ] Scaffold `Tattlebun.Core`, `Tattlebun.Windows`, `Tattlebun.Hook`, `Tattlebun.Desktop` and `Tattlebun.Tests` on .NET 10 and Avalonia 12, with central package versions and warnings as errors.
-- [ ] A tray icon made from the mark, with Quit. No window yet. Load Avalonia's Fluent theme, or the tray menu opens empty (Staypaw's fix).
+- [ ] Pick the real logo in a claude.ai design project, perhaps drawn from Tilly's bunny-head pin, and export `mark.svg` with a `-dark` variant. `scripts/make_lockup.py` rebuilds the lockups from it, and `scripts/make-icons.cs` the icon. *(owner)*
+- [x] Scaffold `Tattlebun.Core`, `Tattlebun.Windows`, `Tattlebun.Hook`, `Tattlebun.Desktop` and `Tattlebun.Tests` on .NET 10 and Avalonia 12, with central package versions and warnings as errors.
+- [x] A tray icon made from the mark, with Quit. No window yet. Load Avalonia's Fluent theme, or the tray menu opens empty (Staypaw's fix).
 - [ ] `tattlebun-hook` reads the hook's JSON from stdin, appends one line to a log and exits 0. Nothing else yet.
 - [ ] Design tokens: a spacing scale, a type scale, a palette with shades and a few shadow levels.
 - [ ] NativeAOT publish for `win-x64` of both programs, with no trim or AOT warnings.

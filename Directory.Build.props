@@ -1,0 +1,22 @@
+<Project>
+  <PropertyGroup>
+    <!-- Tattlebun only runs on Windows; reading the registry and the tray need the Windows TFM. -->
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <!-- IDE0005 (unused usings) only runs in build when docs are generated. -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+
+    <Version>0.1.0</Version>
+    <Authors>Hazel Granados</Authors>
+    <Company>Tattlebun</Company>
+    <Product>Tattlebun</Product>
+    <Copyright>Copyright 2026 Hazel Granados</Copyright>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <RepositoryUrl>https://github.com/hazeliscoding/tattlebun</RepositoryUrl>
+  </PropertyGroup>
+</Project>
