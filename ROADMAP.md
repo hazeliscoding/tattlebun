@@ -1,0 +1,123 @@
+# Roadmap
+
+Tattlebun is a Windows tray app that keeps a receipt of what your coding agents changed on your PC outside the repo, and undoes those changes once you confirm. This file tracks the decisions already made, what gets built in what order, and what's out of scope.
+
+## Architecture characteristics
+
+What the design must protect. Everything else gets ordinary good design. The owner picked these on 2026-10-24.
+
+1. **Trust.** It only reads, nothing leaves the PC, and it changes something only after you confirm an undo.
+2. **Fair blame.** It never pins a change on a command or session that didn't make it. When it can't tell, it says "one of these" or "not tied to a session".
+3. **Out of the agent's way.** A snapshot adds under 100 ms to a command, and a Tattlebun failure never blocks one.
+
+Given up for them: exact per-process blame (ETW needs admin), a view of the whole disk, and in-app undo of changes that need admin.
+
+## Decisions (2026-10-24)
+
+The owner's:
+
+- **Build Tattlebun.** It's the owner's own problem: running several agents at once, the hardest part of checking their work is what they ran on the PC, not what they changed in the repo. A search of the web and GitHub on 2026-10-24 found no tool that keeps a receipt of each session's system changes. The nearest are Process Monitor (everything, raw), transcript scanners such as whatileaked, and aGiTrack, which commits changes inside the repo. This gives up that time for other ideas.
+- **The name is Tattlebun:** a bunny that tattles on what your agents did. On 2026-10-24 nothing called Tattlebun was on GitHub, and neither `tattlebun.com` nor `tattlebun.app` had DNS. Trademarks aren't searched yet. This gives up the runner-up, Sniffpup, whose `.com` is registered.
+- **A snapshot around each command, not each session.** Claude Code's `PreToolUse` and `PostToolUse` hooks run before and after every tool call, with the session ID, the tool call's ID and the exact command. The owner runs several agents at once, so snapshots at session start and end would mix their changes. A killed session also never sends `SessionEnd`: the [hooks docs](https://code.claude.com/docs/en/hooks) list its exit reasons, and none is a kill or a crash. ETW would say exactly which process wrote each file or key, but it needs admin. This gives up a command that never waits: each one waits for a snapshot, hence the 100 ms budget.
+- **Blame by interval.** Each snapshot, from any session, closes an interval. A change found in it goes to the commands that were running during it: one command gets it, several get "one of these", and none means "not tied to a session". A session that died mid-command has its interval closed by the next snapshot from any session. Receipts say "while", not "by". This gives up certainty: a change you make yourself during an agent's command lands on that command's receipt.
+- **A fixed list of files, not the whole home folder.** Dotfiles and tool configs, global package folders, new items at the top of the home folder, and every path an agent's Write or Edit call touched outside the repo, which the hook names exactly. Each file is recorded by size, time and hash. A watcher on the whole home folder would blame agents for what Chrome, OneDrive and app caches write. This gives up a stray file a command writes deep in some other folder.
+- **Undo what doesn't need admin, and show a command for the rest.** Each undo runs only after you tick it and confirm. For a machine-wide PATH entry, a service, an `HKLM` startup entry or a machine-wide install, the receipt shows the exact command to run in an admin terminal. Tattlebun never asks for elevation. This gives up one-click undo of machine-wide changes.
+- **Old values are kept, encrypted.** A dotfile or variable can only go back if its old value was kept. Tattlebun keeps the version from before each change, encrypted with DPAPI for the current user, and deletes it after 30 days or when you dismiss the receipt. Diffs mask values of keys that look like secrets (token, password, auth). This gives up the strictest promise, never storing contents, because `.npmrc` and user variables can hold tokens.
+- **Claude Code CLI only in version one,** as Sweepling started. Its hooks give the design everything it needs, and it's what the owner runs most. The snapshot engine doesn't care which agent runs the command, so others come as more hooks. This gives up Codex and other agents at launch.
+- **Its own app, not part of Sweepling.** Sweepling closes processes your sessions left running, and Tattlebun undoes what they changed, so each tells a smaller trust story. Per-command hooks don't need Sweepling's process trees, which was the reason to merge them. This gives up a shared tray icon and install.
+- **The brand is a placeholder:** a wide-eyed bunny peeking over a receipt, with one ear perked, in `docs/brand/`. Its eyes are open where Shybun's are closed, and its accent is cornflower, since Shybun has pink, Staypaw orange and Sweepling gold. The wordmark is Fredoka SemiBold, as in the other apps. The real logo and the mascot are M0 owner items.
+
+Claude's calls, approved by the owner with the design:
+
+- **Public, under Apache-2.0,** like Staypaw and Shybun. A tool that reads your configs and what your agents ran is easier to trust when people can read it.
+- **Two programs.** `tattlebun-hook`, a small console exe that Claude Code runs around each command: it takes a snapshot, records what changed and exits. And the tray app, which shows the receipts and runs undo. This gives up a single exe, because the hook must start fast and stay small.
+- **.NET 10, Avalonia 12 and NativeAOT,** laid out like Shybun: `Tattlebun.Core` (snapshots as data, the diff, blame and receipts, with no Win32), `Tattlebun.Windows` (reading and undoing each kind of change), `Tattlebun.Hook`, `Tattlebun.Desktop` and `Tattlebun.Tests`. Win32 calls go through CsWin32. Because Core calls no Win32, blame tests run on made-up snapshots. This gives up a smaller exe on a runtime Windows already ships.
+- **Read state straight from the registry and disk,** never by running `npm ls -g`, `pip list` or `winget list`, and skip a part whose last-write time hasn't changed. That's how a snapshot stays under 100 ms. This gives up those tools' own view, such as packages a tool installed somewhere unusual.
+- **One SQLite file in `%LOCALAPPDATA%\Tattlebun`** for the receipts, the last snapshot and the encrypted old values, in WAL mode, because parallel tool calls run several hooks at once. This gives up plain files a person could read.
+- **The hooks ship as a Claude Code plugin you add yourself.** Tattlebun never edits `~/.claude/settings.json`, because it shouldn't make the kind of change it reports, and you see the hooks before they run. A hook that fails or times out doesn't block the command, which is Claude Code's default. This gives up a one-step setup.
+- **No network code, so no in-app updater.** Updates come through winget and GitHub Releases, as in Staypaw.
+- **Velopack Setup and a portable zip, signed through the Artifact Signing setup Staypaw uses.** Setup installs per user and never asks for admin.
+- **The spike comes first in M1,** not before Day 1. Day 1 is only docs, so they're cheap to change if the spike shows snapshots can't stay under 100 ms.
+
+## M0: Placeholder (as soon as possible)
+
+- [x] Add `LICENSE` (Apache-2.0), `README.md`, `ROADMAP.md` and `AGENTS.md`.
+- [x] Add the placeholder mark and its lockups to `docs/brand/`.
+- [ ] Search trademarks for Tattlebun: USPTO. *(owner)*
+- [ ] Pick the real logo and the bunny mascot in a claude.ai design project, and export `mark.svg` with a `-dark` variant. `scripts/make_lockup.py` rebuilds the lockups from it. *(owner)*
+- [ ] Scaffold `Tattlebun.Core`, `Tattlebun.Windows`, `Tattlebun.Hook`, `Tattlebun.Desktop` and `Tattlebun.Tests` on .NET 10 and Avalonia 12, with central package versions and warnings as errors.
+- [ ] A tray icon made from the mark, with Quit. No window yet. Load Avalonia's Fluent theme, or the tray menu opens empty (Staypaw's fix).
+- [ ] `tattlebun-hook` reads the hook's JSON from stdin, appends one line to a log and exits 0. Nothing else yet.
+- [ ] Design tokens: a spacing scale, a type scale, a palette with shades and a few shadow levels.
+- [ ] NativeAOT publish for `win-x64` of both programs, with no trim or AOT warnings.
+- [ ] Guardrail tests, each with a positive control: `Tattlebun.Core` references neither Avalonia nor any Win32 interop, and no Tattlebun assembly uses `System.Net`.
+- [ ] CI on Windows: build, test, and secret scanning with the gitleaks release binary, checked against its published checksum and run with `--log-opts="--full-history HEAD"`.
+
+**Done when:** CI is green on `main`, and `dotnet publish -r win-x64` gives a native tray exe that starts in the tray, and a native hook exe that exits 0 on a sample `PreToolUse` payload.
+
+## M1: Receipts
+
+- [ ] **Spike:** a throwaway PowerShell hook in a scratch project that snapshots around each command and logs the diff and the time, run through one real agent session. Record what changed and how long snapshots took on the owner's PC. If they can't stay under 100 ms, reopen the per-command decision before building on it.
+- [ ] Snapshot readers for each item on the watch list, reading the registry and disk directly and skipping parts whose last-write time hasn't changed.
+- [ ] Blame by interval in `Tattlebun.Core`, with tests for one command, two overlapping commands, no command, and a session that died mid-command.
+- [ ] Close the interval of a session that died: when the Claude Code process its hook saw (`CLAUDE_PID`) is gone.
+- [ ] Settle background commands. A `run_in_background` command keeps running after its `PostToolUse`, so its later changes could land on another session's command. Try keeping its interval open while its processes live, found by `CLAUDE_CODE_SESSION_ID` in their environment, as Sweepling does.
+- [ ] Record the path of each Write and Edit call outside the session's working folder.
+- [ ] Receipts and the last snapshot in SQLite (WAL), safe with parallel hooks.
+- [ ] A Claude Code plugin in this repo whose hooks run `tattlebun-hook` for Bash, PowerShell, Write and Edit.
+- [ ] `tattlebun-hook --list` prints recent receipts, for checking before the window exists.
+
+**Done when:** in a real session, `npm i -g` of a small package shows up on its command's receipt; a command that changes nothing gets an empty receipt; overlapping commands from two sessions both get "one of these"; and over 200 commands on the owner's PC, 95% of snapshots take under 100 ms.
+
+## M2: Review window
+
+- [ ] The tray icon counts changes since you last looked, and notifies when the count rises.
+- [ ] A window that lists sessions by project folder and start time, their commands, and each change in words.
+- [ ] Sections for "one of these" and "not tied to a session".
+- [ ] Dotfile and variable diffs, with secret-looking values masked.
+- [ ] Dismiss a receipt.
+
+**Done when:** tests cover each section and the masking, and the window shows a real receipt from an M1 session.
+
+## M3: Undo
+
+- [ ] Undo each kind of change that doesn't need admin: a user variable or PATH entry, an `npm -g`, `pip --user` or `dotnet tool` package, an `HKCU` startup entry, a scheduled task you created, a user-scope install (through its uninstaller), and a dotfile.
+- [ ] Before undoing, check the current state again, and refuse if it changed after the receipt, so a newer change isn't overwritten.
+- [ ] Changes that need admin show the exact command, ready to copy.
+- [ ] Keep old values encrypted with DPAPI for the current user, and delete them after 30 days or when the receipt is dismissed.
+- [ ] Log every undo with what it changed back.
+
+**Done when:** an explicit test makes each kind of change that doesn't need admin, undoes it through Tattlebun and finds the snapshot from before; an undo refuses when the state changed after the receipt; and no old value is readable from the database without DPAPI.
+
+## M4: 1.0
+
+- [ ] A Velopack per-user Setup and a portable zip, built by a release workflow.
+- [ ] Sign releases with Artifact Signing through OIDC, from a `release` environment that only `v*` tags can deploy to, as in Staypaw.
+- [ ] Scan the published exes with Microsoft Defender.
+- [ ] Publish the plugin from this repo, with install steps in the README.
+- [ ] Submit a winget manifest.
+- [ ] A screenshot and a short demo in the README.
+
+**Done when:** `winget install hazeliscoding.Tattlebun` installs a signed build that starts in the tray, and after adding the plugin, an agent's `npm i -g` shows up in the tray with Undo.
+
+## Later
+
+- Codex and other agents, as more hooks on the same engine.
+- A filtered watcher on the home folder, if receipts show the fixed list misses things.
+- A link from Sweepling's leftovers to the receipt of the session that started them.
+- Undo of machine-wide changes through a separate elevated step, if copying commands proves annoying.
+- Copy a receipt as Markdown, to paste into a pull request.
+
+## Not planned
+
+- **Network code:** an updater, telemetry or crash reporting.
+- **Running elevated, or ETW tracing,** which needs admin. See Decisions.
+- **Watching the whole disk,** or reading files outside the watch list.
+- **macOS and Linux.** Claude Code's sandbox can already confine agents there.
+- **Blocking commands before they run.** Tattlebun reports and undoes. Claude Code's permission rules already decide what may run.
+
+## How we'll know it works
+
+- The owner's dogfooding: wrong blames, where a receipt pins a change on a command that didn't make it, must stay at zero.
+- The hook's own timings: 95% of snapshots under 100 ms.
+- Public signals after release: issues, downloads and winget installs. No interviews or outreach.
