@@ -66,6 +66,7 @@ One meaning per term. Use these words in code, docs and commits.
 - `dotnet run scripts/make-icons.cs` rebuilds `docs/brand/tattlebun.ico` from the mark.
 - `dotnet publish src/Tattlebun.Desktop -c Release -r win-x64 -o publish/Tattlebun.Desktop` builds the native tray exe, and the same with `src/Tattlebun.Hook` builds `tattlebun-hook.exe`. It needs Visual Studio's C++ workload. If linking fails with "'vswhere.exe' is not recognized", put `%ProgramFiles(x86)%\Microsoft Visual Studio\Installer` on `PATH`: VS 18's `vcvarsall.bat` calls `vswhere.exe` by bare name, and the error text lands in the linker path.
 - `dotnet test --solution Tattlebun.slnx` runs the tests.
+- `powershell -NoProfile -File scripts/tray.ps1 [<screenshot.png>]` checks a running Tattlebun through UI Automation: it finds the tray icon, opens its menu, optionally saves a screenshot, and chooses Quit Tattlebun. Avalonia draws the menu as a `TrayPopupRoot` window at the cursor, so the script restores the cursor only once the menu is open.
 
 ## Working style
 
