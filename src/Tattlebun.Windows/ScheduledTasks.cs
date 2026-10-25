@@ -94,9 +94,11 @@ public static class ScheduledTasks
                 folders->Release();
             }
         }
-        catch (Exception e) when (e is UnauthorizedAccessException or COMException)
+        catch (UnauthorizedAccessException)
         {
-            // Some of Windows' own folders refuse an unelevated user; the rest still count.
+            // Windows refuses some of its own folders to an unelevated user every time, so skipping them gives the
+            // same list each minute. Any other failure ends the whole listing, which then isn't recorded: a partial
+            // list would show its missing tasks as removed, and blame whoever happened to be running.
         }
         finally
         {
