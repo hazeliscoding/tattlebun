@@ -53,7 +53,7 @@ Claude's calls, approved by the owner with the design:
 - [ ] Pick the real logo in a claude.ai design project, perhaps drawn from Tilly's bunny-head pin, and export `mark.svg` with a `-dark` variant. `scripts/make_lockup.py` rebuilds the lockups from it, and `scripts/make-icons.cs` the icon. *(owner)*
 - [x] Scaffold `Tattlebun.Core`, `Tattlebun.Windows`, `Tattlebun.Hook`, `Tattlebun.Desktop` and `Tattlebun.Tests` on .NET 10 and Avalonia 12, with central package versions and warnings as errors.
 - [x] A tray icon made from the mark, with Quit. No window yet. Load Avalonia's Fluent theme, or the tray menu opens empty (Staypaw's fix).
-- [ ] `tattlebun-hook` reads the hook's JSON from stdin, appends one line to a log and exits 0. Nothing else yet.
+- [x] `tattlebun-hook` reads the hook's JSON from stdin, appends one line to a log and exits 0. Nothing else yet. The line holds the event, session, tool and tool call ID, never the command.
 - [ ] Design tokens: a spacing scale, a type scale, a palette with shades and a few shadow levels.
 - [ ] NativeAOT publish for `win-x64` of both programs, with no trim or AOT warnings.
 - [ ] Guardrail tests, each with a positive control: `Tattlebun.Core` references neither Avalonia nor any Win32 interop, Tattlebun's own code references no networking assembly, and only the tray app references Velopack.
