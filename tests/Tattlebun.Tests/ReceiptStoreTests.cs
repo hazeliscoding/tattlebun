@@ -133,6 +133,24 @@ public sealed class ReceiptStoreTests : IDisposable
             store.Verdicts().Select(v => (v.Change, v.SuspectToolUseIds.ToArray())));
     }
 
+    // The tray app lists tasks at snapshots 1 and 4; hooks in between don't read them.
+    [Fact]
+    public void A_part_read_less_often_is_carried_forward_and_judged_since_its_last_reading()
+    {
+        Snapshot Tasks(params string[] names) =>
+            new(DateTimeOffset.UtcNow, new Dictionary<string, Part> { ["tasks"] = new("", names.ToDictionary(n => n, _ => "1")) });
+        using var store = new ReceiptStore(StorePath);
+
+        store.Record(new HookCall("TaskListing", "", "", ""), (_, _, _) => Tasks(@"\Existing"));
+        store.Record(Call("PreToolUse", "s1", "schtasks"), (_, previous, _) => { Assert.Contains("tasks", previous!.Parts.Keys); return Snap(); });
+        store.Record(Call("PostToolUse", "s1", "schtasks"), (_, _, _) => Snap());
+        store.Record(new HookCall("TaskListing", "", "", ""), (_, _, _) => Tasks(@"\Existing", @"\Updater"));
+
+        var verdict = Assert.Single(store.Verdicts());
+        Assert.Equal(new Change("tasks", @"\Updater", ChangeKind.Added), verdict.Change);
+        Assert.Equal(["schtasks"], verdict.SuspectToolUseIds);
+    }
+
     [Fact]
     public void Only_the_most_recently_written_files_stay_watched()
     {

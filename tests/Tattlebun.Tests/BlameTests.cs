@@ -55,6 +55,21 @@ public class BlameTests
         Assert.Equal([running], Blame.Suspects([running], 5, 6));
     }
 
+    // Tasks were last listed at snapshot 2; snapshots 3 and 4 came from hooks and didn't read them.
+    [Fact]
+    public void A_change_in_a_part_read_less_often_is_judged_since_that_part_was_last_read()
+    {
+        var early = new Command("s1", "schtasks", 2, 3);
+        var late = new Command("s2", "test", 4, 5);
+        var task = new Change("tasks", @"\Updater", ChangeKind.Added);
+        var path = new Change("env-user", "Path", ChangeKind.Changed);
+
+        var verdicts = Blame.Judge([task, path], [early, late], part => part == "tasks" ? 2 : 4, 5);
+
+        Assert.Equal([early, late], verdicts[0].Suspects);
+        Assert.Equal([late], verdicts[1].Suspects);
+    }
+
     // Its session died after snapshot 4; snapshot 5, from another session, noticed and closed it.
     [Fact]
     public void A_command_whose_session_died_gets_changes_only_up_to_the_snapshot_that_closed_it()

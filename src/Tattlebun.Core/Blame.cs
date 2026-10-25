@@ -35,9 +35,14 @@ public static class Blame
     public static IReadOnlyList<Command> Suspects(IEnumerable<Command> commands, long from, long to) =>
         [.. commands.Where(c => c.StartSnapshot < to && (c.EndSnapshot is null || c.EndSnapshot > from))];
 
-    public static IReadOnlyList<Verdict> Judge(IReadOnlyList<Change> changes, IEnumerable<Command> commands, long from, long to)
+    public static IReadOnlyList<Verdict> Judge(IReadOnlyList<Change> changes, IEnumerable<Command> commands, long from, long to) =>
+        Judge(changes, commands, _ => from, to);
+
+    // A part read less often than every snapshot, such as scheduled tasks, or one that couldn't be read for a while,
+    // changed at some point since it was last read, so each change is judged over its own part's interval.
+    public static IReadOnlyList<Verdict> Judge(IReadOnlyList<Change> changes, IEnumerable<Command> commands, Func<string, long> lastRead, long to)
     {
-        var suspects = Suspects(commands, from, to);
-        return [.. changes.Select(change => new Verdict(change, suspects))];
+        var all = commands.ToList();
+        return [.. changes.Select(change => new Verdict(change, Suspects(all, lastRead(change.Part), to)))];
     }
 }

@@ -76,7 +76,7 @@ public sealed class ReceiptStore : IDisposable
         }
 
         var fingerprinter = new Fingerprinter(FingerprintKey());
-        var (previous, previousNumber) = LastSnapshot();
+        var (previous, previousNumber, readAt) = LastSnapshot();
 
         // A file an agent writes outside its folder joins the watch list before this snapshot, which becomes its
         // baseline, so the call's PostToolUse finds what it did to it. It stays watched after that, among the
@@ -113,8 +113,11 @@ public sealed class ReceiptStore : IDisposable
 
         if (previous is not null)
         {
-            var commands = Commands("WHERE end_snapshot IS NULL OR end_snapshot > $from", ("$from", previousNumber));
-            foreach (var verdict in Blame.Judge(Diff.Between(previous, now), commands, previousNumber, number))
+            var changes = Diff.Between(previous, now);
+            long LastRead(string part) => readAt.TryGetValue(part, out var at) ? at : previousNumber;
+            var from = changes.Count == 0 ? previousNumber : changes.Min(c => LastRead(c.Part));
+            var commands = Commands("WHERE end_snapshot IS NULL OR end_snapshot > $from", ("$from", from));
+            foreach (var verdict in Blame.Judge(changes, commands, LastRead, number))
             {
                 var id = Scalar<long>(
                     "INSERT INTO changes (snapshot, part, name, kind) VALUES ($snapshot, $part, $name, $kind) RETURNING id",
@@ -141,9 +144,22 @@ public sealed class ReceiptStore : IDisposable
             Execute("UPDATE commands SET end_snapshot = $number WHERE tool_use_id = $tool_use_id AND end_snapshot IS NULL", ("$number", number), ("$tool_use_id", call.ToolUseId));
         }
 
+        // A part this snapshot didn't read, such as the tray app's scheduled tasks in a hook's snapshot, is carried
+        // forward with the number it was last read at, so its next reading is judged over the whole time since.
+        // A written file that left the watch list isn't read again, so it isn't carried.
+        var parts = new Dictionary<string, Part>(now.Parts);
+        foreach (var (name, part) in previous?.Parts ?? new Dictionary<string, Part>())
+        {
+            if (!name.StartsWith("file|", StringComparison.Ordinal))
+            {
+                parts.TryAdd(name, part);
+            }
+        }
+
+        var lastRead = parts.Keys.ToDictionary(name => name, name => now.Parts.ContainsKey(name) ? number : readAt.GetValueOrDefault(name, previousNumber));
         Execute(
             "INSERT INTO meta (key, value) VALUES ('last', $value) ON CONFLICT (key) DO UPDATE SET value = excluded.value",
-            ("$value", JsonSerializer.SerializeToUtf8Bytes(new LastSnapshot(number, now), StoreJson.Default.LastSnapshot)));
+            ("$value", JsonSerializer.SerializeToUtf8Bytes(new LastSnapshot(number, now with { Parts = parts }, lastRead), StoreJson.Default.LastSnapshot)));
 
         // M1's budget is per hook, from the moment its process started, so that's what is kept.
         if (call.HookStarted is { } started)
@@ -255,11 +271,11 @@ public sealed class ReceiptStore : IDisposable
         return ProtectedData.Unprotect(Scalar<byte[]>("SELECT value FROM meta WHERE key = 'fingerprint_key'"), null, DataProtectionScope.CurrentUser);
     }
 
-    private (Snapshot? Snapshot, long Number) LastSnapshot()
+    private (Snapshot? Snapshot, long Number, IReadOnlyDictionary<string, long> ReadAt) LastSnapshot()
     {
         LastSnapshot? last = null;
         Each("SELECT value FROM meta WHERE key = 'last'", row => last = JsonSerializer.Deserialize(row.GetFieldValue<byte[]>(0), StoreJson.Default.LastSnapshot));
-        return last is null ? (null, 0) : (last.Snapshot, last.Number);
+        return last is null ? (null, 0, new Dictionary<string, long>()) : (last.Snapshot, last.Number, last.ReadAt);
     }
 
     private List<Command> Commands(string where, params (string Name, object Value)[] parameters)
@@ -307,7 +323,7 @@ public sealed class ReceiptStore : IDisposable
     }
 }
 
-internal sealed record LastSnapshot(long Number, Snapshot Snapshot);
+internal sealed record LastSnapshot(long Number, Snapshot Snapshot, IReadOnlyDictionary<string, long> ReadAt);
 
 [JsonSerializable(typeof(LastSnapshot))]
 internal sealed partial class StoreJson : JsonSerializerContext;
