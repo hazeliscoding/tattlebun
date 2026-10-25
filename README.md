@@ -5,6 +5,8 @@
   </picture>
 </h1>
 
+<img align="right" width="160" src="docs/brand/tilly/over-the-receipt.png" alt="Tilly, a front-desk clerk with copper hair and a bunny-head pin, peeks wide-eyed over a long receipt she holds up to her face, as Tattlebun keeps a receipt for every command an agent runs.">
+
 **See what your coding agents changed on your PC outside the repo, and undo it.** Every command an agent runs gets a receipt.
 
 Git shows what an agent changed in your repo. It doesn't show the global npm package, the PATH entry, the `.gitconfig` line or the startup entry it added along the way. On Windows, Claude Code's sandbox [doesn't run at all](https://code.claude.com/docs/en/sandboxing), so an agent's commands can do anything you can. Run three agents at once, and nobody can say which one did it.
@@ -37,6 +39,8 @@ Planned for 1.0:
 - **Claude Code first,** through a plugin you add yourself. Other agents come later.
 
 ## The trust contract
+
+<img align="right" width="150" src="docs/brand/tilly/undo.png" alt="Tilly rubs out a line on a small receipt with her pencil's eraser and smiles, as Tattlebun undoes a change only after you confirm it.">
 
 Tattlebun reads your environment, your configs and what your agents ran, so it has to be easy to trust.
 
@@ -80,4 +84,4 @@ Issues are welcome. Planning lives in [ROADMAP.md](ROADMAP.md).
 
 ## License
 
-[Apache-2.0](LICENSE).
+[Apache-2.0](LICENSE). Tilly, the clerk in this README, was drawn with an AI image model and is Apache-2.0 like the code.
