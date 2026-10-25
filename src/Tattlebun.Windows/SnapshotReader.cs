@@ -96,11 +96,12 @@ public sealed class SnapshotReader(Fingerprinter fingerprinter, string home, str
             Add($"file|{file}", () => FileStamp(file), () => FileFingerprint(file));
         }
 
-        // An agent chose these paths. One that has become a link could lead anywhere, even to a network share, so
-        // it's left out rather than followed.
+        // An agent chose these paths. A link on one, the file or any folder above it, could lead anywhere, even to a
+        // network share, so such a file is left out rather than followed.
+        var links = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
         foreach (var file in writtenFiles ?? [])
         {
-            Add($"file|{file}", () => new FileInfo(file) is { Exists: true } info && info.Attributes.HasFlag(FileAttributes.ReparsePoint) ? throw new IOException("a link") : FileStamp(file), () => FileFingerprint(file));
+            Add($"file|{file}", () => HasLink(file, links) ? throw new IOException("a link on the path") : FileStamp(file), () => FileFingerprint(file));
         }
 
         return new Snapshot(DateTimeOffset.UtcNow, parts);
@@ -109,6 +110,38 @@ public sealed class SnapshotReader(Fingerprinter fingerprinter, string home, str
             Add(name, () => DirStamp([dir]), () => Directory.Exists(dir)
                 ? new DirectoryInfo(dir).EnumerateFileSystemInfos().ToDictionary(e => e.Name, e => e.LastWriteTimeUtc.Ticks.ToString())
                 : []);
+    }
+
+    // Walks down from the drive root and stops at the first link, so no link is ever followed: each step reads the
+    // attributes of a path whose folders above were already found to be plain.
+    internal static bool HasLink(string path, Dictionary<string, bool> known)
+    {
+        var parts = path.Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries);
+        var current = parts[0] + Path.DirectorySeparatorChar;
+        foreach (var part in parts.Skip(1))
+        {
+            current = Path.Combine(current, part);
+            if (!known.TryGetValue(current, out var isLink))
+            {
+                try
+                {
+                    isLink = File.GetAttributes(current).HasFlag(FileAttributes.ReparsePoint);
+                }
+                catch (Exception e) when (e is FileNotFoundException or DirectoryNotFoundException)
+                {
+                    isLink = false;
+                }
+
+                known[current] = isLink;
+            }
+
+            if (isLink)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     // Claude Code writes these at the top of the home folder while commands run; a receipt would blame the agent.

@@ -51,10 +51,12 @@ public static class HookRun
     // network, which could leak the user's NTLM hash and stall the agent.
     public static bool IsLocal(string fullPath) =>
         fullPath.Length > 3 && char.IsAsciiLetter(fullPath[0]) && fullPath[1] == ':' && fullPath[2] == '\\'
-        && !DeviceNames.Contains(Path.GetFileNameWithoutExtension(fullPath).TrimEnd(' ', '.'))
+        && !fullPath[2..].Contains(':')
+        && !DeviceNames.Contains(Path.GetFileName(fullPath).Split('.')[0].TrimEnd(' '))
         && new DriveInfo(fullPath[..3]).DriveType == DriveType.Fixed;
 
-    // Windows 10 still opens these as devices in any folder, and reading CON would wait on the console.
+    // Windows 10 still opens these as devices in any folder, whatever follows the first dot, and reading CON would
+    // wait on the console. A colon after the drive names an alternate data stream.
     private static readonly HashSet<string> DeviceNames = new(
         ["CON", "PRN", "AUX", "NUL", "CONIN$", "CONOUT$", .. Enumerable.Range(0, 10).SelectMany(n => new[] { $"COM{n}", $"LPT{n}" }), "COM¹", "COM²", "COM³", "LPT¹", "LPT²", "LPT³"],
         StringComparer.OrdinalIgnoreCase);

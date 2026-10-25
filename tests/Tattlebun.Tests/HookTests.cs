@@ -51,6 +51,8 @@ public sealed class HookTests : IDisposable
     [InlineData(@"\\?\C:\Users\me\.bashrc")]
     [InlineData(@"\\.\PhysicalDrive0")]
     [InlineData(@"C:\Users\me\CON")]
+    [InlineData(@"C:\Users\me\con.tar.gz")]
+    [InlineData(@"C:\Users\me\notes.txt:hidden")]
     [InlineData(@"relative\.bashrc")]
     public void A_path_that_isnt_a_plain_local_file_is_never_watched(string path)
     {

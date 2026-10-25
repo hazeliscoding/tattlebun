@@ -104,6 +104,45 @@ public sealed class SnapshotReaderTests : IDisposable
         Assert.Equal([new Change($"file|{file}", file, ChangeKind.Added)], Diff.Between(before, reader.Read(before, [file])));
     }
 
+    // A junction on the way could lead to a network share, so the file behind it is left out, not followed.
+    [Fact]
+    public void A_written_file_behind_a_folder_link_is_left_out()
+    {
+        var reader = TempReader();
+        var target = Path.Combine(_root, "target");
+        Directory.CreateDirectory(target);
+        File.WriteAllText(Path.Combine(target, "settings.json"), "{}");
+        var link = Path.Combine(_root, "link");
+        var start = new System.Diagnostics.ProcessStartInfo("cmd.exe", $"/c mklink /J \"{link}\" \"{target}\"")
+        {
+            CreateNoWindow = true,
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+        };
+        using (var mklink = System.Diagnostics.Process.Start(start)!)
+        {
+            mklink.StandardOutput.ReadToEnd();
+            mklink.WaitForExit();
+        }
+
+        try
+        {
+            var behindLink = Path.Combine(link, "settings.json");
+            var direct = Path.Combine(target, "settings.json");
+            var snapshot = reader.Read(null, [behindLink, direct]);
+
+            Assert.True(File.Exists(behindLink));
+            Assert.DoesNotContain($"file|{behindLink}", snapshot.Parts.Keys);
+            // Positive control: the same file, reached without the link, is read.
+            Assert.Contains($"file|{direct}", snapshot.Parts.Keys);
+        }
+        finally
+        {
+            // Deleting the junction itself leaves its target alone; a recursive delete refuses it.
+            Directory.Delete(link);
+        }
+    }
+
     [Fact]
     public void Global_npm_packages_are_read_with_their_scopes()
     {
