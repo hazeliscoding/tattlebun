@@ -71,7 +71,7 @@ Claude's calls, approved by the owner with the design:
 ## M1: Receipts
 
 - [x] **Spike:** a throwaway PowerShell hook in a scratch project that snapshots around each command and logs the diff and the time, run through one real agent session. Record what changed and how long snapshots took on the owner's PC. If they can't stay under 100 ms, reopen the per-command decision before building on it.
-- [ ] Snapshot readers for each item on the watch list, reading the registry and disk directly and skipping parts whose last-write time hasn't changed. Under nvm-windows, npm's global packages are in `%NVM_SYMLINK%\node_modules`, not `%APPDATA%\npm`.
+- [x] Snapshot readers for each item on the watch list, reading the registry and disk directly and skipping parts whose last-write time hasn't changed. Under nvm-windows, npm's global packages are in `%NVM_SYMLINK%\node_modules`, not `%APPDATA%\npm`. Values are kept only as keyed fingerprints. Installed apps are read every time, because an upgrade rewrites only the app's own key. On the owner's PC a full read took a median of 14.3 ms and a read reusing unchanged parts 8.5 ms (JIT, warmed up).
 - [ ] The tray app lists scheduled tasks through the Task Scheduler's COM API every minute, and blames a new or removed task by the interval since its last listing.
 - [ ] Blame by interval in `Tattlebun.Core`, with tests for one command, two overlapping commands, no command, and a session that died mid-command.
 - [ ] Close the interval of a session that died: when the Claude Code process its hook saw (`CLAUDE_PID`) is gone.
