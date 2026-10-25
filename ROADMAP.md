@@ -36,13 +36,14 @@ Claude's calls, approved by the owner with the design:
 - **One SQLite file in `%LOCALAPPDATA%\Tattlebun`** for the receipts, the last snapshot and the encrypted old values, in WAL mode, because parallel tool calls run several hooks at once. This gives up plain files a person could read.
 - **The hooks ship as a Claude Code plugin you add yourself.** Tattlebun never edits `~/.claude/settings.json`, because it shouldn't make the kind of change it reports, and you see the hooks before they run. A hook that fails or times out doesn't block the command, which is Claude Code's default. This gives up a one-step setup.
 - **No network code, so no in-app updater.** Updates come through winget and GitHub Releases, as in Staypaw. *(Superseded: updates apply on their own, under Decisions (2026-10-25).)*
-- **Velopack Setup and a portable zip, signed through the Artifact Signing setup Staypaw uses.** Setup installs per user and never asks for admin.
+- **Velopack Setup and a portable zip, signed through the Artifact Signing setup Staypaw uses.** *(The portable zip is superseded on 2026-10-25: no portable copy, under Decisions (2026-10-25).)* Setup installs per user and never asks for admin.
 - **The spike comes first in M1,** not before Day 1. Day 1 is only docs, so they're cheap to change if the spike shows snapshots can't stay under 100 ms.
 
 ## Decisions (2026-10-25)
 
 - **Tilly Stubbs is the mascot, beside the placeholder mark.** The owner's call. She is a front-desk clerk who notices every little change and tells you exactly what happened, fairly and kindly: the mark's bunny-over-a-receipt as a person, drawn in the owner's anime-pipeline. Receipts say "while", not "by", so she tells and never accuses. She appears in the README, in `docs/brand/tilly/` and in launch posts; whether her psst sticker goes on M2's notification is decided when M2 starts. The bunny mark stays the logo and the tray icon, and the real logo is still an owner item. Her art was drawn with an AI image model, and it is Apache-2.0 like the code; the README says both. Her one-of-these sticker stays out, because its see-through gaps show a dark page through it. Her cardigan (`#507DBF`) stays as drawn, near the mark's cornflower, rather than retinting her. This gives up a single mark, a sticker for "one of these" for now, and exclusive rights to her art: anyone may reuse or change it.
 - **Updates apply on their own, as in Sweepling.** The owner's call. Velopack in the tray app checks GitHub Releases a minute after it starts and every 4 hours after, downloads in the background, and restarts into the update only while the review window is closed, so it never cuts off an undo. A tick in the tray menu turns it off, and a build run from source never checks. The update check is the only network call: Tattlebun's own code never references a networking assembly, and the hook doesn't reference Velopack, so a snapshot never touches the network. No telemetry. This gives up the strictest promise, no network code at all, and some size: Velopack and its HTTP stack grew Sweepling's exe from 19.9 to 25.6 MB.
+- **No portable copy, as in Sweepling.** The owner's call. Velopack's per-user Setup is the only download. A copy that can't update itself would miss fixes. This gives up a zip for people who won't run an installer.
 
 ## M0: Placeholder (as soon as possible)
 
@@ -99,7 +100,7 @@ Claude's calls, approved by the owner with the design:
 
 ## M4: 1.0
 
-- [ ] A Velopack per-user Setup and a portable zip, built by a release workflow.
+- [ ] A Velopack per-user Setup, built by a release workflow.
 - [ ] Automatic updates through Velopack, as in Sweepling: a check a minute after start and every 4 hours, held while the review window is open, with an "Update automatically" tick in the tray menu.
 - [ ] Sign releases with Artifact Signing through OIDC, from a `release` environment that only `v*` tags can deploy to, as in Staypaw.
 - [ ] Scan the published exes with Microsoft Defender.
