@@ -1,3 +1,5 @@
+using System.ComponentModel;
+using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -7,7 +9,50 @@ using Tattlebun.Core;
 namespace Tattlebun.Windows;
 
 /// <summary>A hook call as the store needs it.</summary>
-public sealed record HookCall(string Event, string Session, string ToolUseId, string Tool);
+/// <param name="Event">The hook event's name.</param>
+/// <param name="Session">The Claude Code session ID.</param>
+/// <param name="ToolUseId">The tool call's ID, empty for events that aren't about one call.</param>
+/// <param name="Tool">The tool's name.</param>
+/// <param name="BatchToolUseIds">For PostToolBatch, every call in the batch.</param>
+/// <param name="Claude">The Claude Code process that ran the hook.</param>
+public sealed record HookCall(string Event, string Session, string ToolUseId, string Tool, IReadOnlyList<string>? BatchToolUseIds = null, ClaudeProcess? Claude = null);
+
+/// <summary>A process, told apart from a later one that reuses its ID by its start time.</summary>
+public sealed record ClaudeProcess(int Pid, long StartedTicks)
+{
+    // Claude Code sets CLAUDE_PID for its hooks to its own process ID.
+    public static ClaudeProcess? FromEnvironment()
+    {
+        if (!int.TryParse(Environment.GetEnvironmentVariable("CLAUDE_PID"), out var pid))
+        {
+            return null;
+        }
+
+        try
+        {
+            using var process = Process.GetProcessById(pid);
+            return new ClaudeProcess(pid, process.StartTime.ToUniversalTime().Ticks);
+        }
+        catch (Exception e) when (e is ArgumentException or InvalidOperationException or Win32Exception)
+        {
+            return null;
+        }
+    }
+
+    // A process this user can't open has taken over the ID, so this user's Claude Code is gone too.
+    public static bool IsAlive(ClaudeProcess claude)
+    {
+        try
+        {
+            using var process = Process.GetProcessById(claude.Pid);
+            return process.StartTime.ToUniversalTime().Ticks == claude.StartedTicks;
+        }
+        catch (Exception e) when (e is ArgumentException or InvalidOperationException or Win32Exception)
+        {
+            return false;
+        }
+    }
+}
 
 /// <summary>One change found between two snapshots, and the commands that were running while it happened.</summary>
 public sealed record StoredVerdict(long Snapshot, Change Change, IReadOnlyList<string> SuspectToolUseIds);
@@ -20,9 +65,11 @@ public sealed record StoredVerdict(long Snapshot, Change Change, IReadOnlyList<s
 public sealed class ReceiptStore : IDisposable
 {
     private readonly SqliteConnection _db;
+    private readonly Func<ClaudeProcess, bool> _isAlive;
 
-    public ReceiptStore(string path)
+    public ReceiptStore(string path, Func<ClaudeProcess, bool>? isAlive = null)
     {
+        _isAlive = isAlive ?? ClaudeProcess.IsAlive;
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         // Microsoft.Data.Sqlite finds the bundled SQLite by reflection, which NativeAOT trims away.
         SQLitePCL.Batteries_V2.Init();
@@ -34,7 +81,7 @@ public sealed class ReceiptStore : IDisposable
             CREATE TABLE IF NOT EXISTS snapshots (number INTEGER PRIMARY KEY AUTOINCREMENT, taken TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS commands (
                 tool_use_id TEXT PRIMARY KEY, session TEXT NOT NULL, tool TEXT NOT NULL,
-                start_snapshot INTEGER NOT NULL, end_snapshot INTEGER);
+                start_snapshot INTEGER NOT NULL, end_snapshot INTEGER, claude_pid INTEGER, claude_started INTEGER);
             CREATE TABLE IF NOT EXISTS changes (
                 id INTEGER PRIMARY KEY AUTOINCREMENT, snapshot INTEGER NOT NULL, part TEXT NOT NULL, name TEXT NOT NULL, kind INTEGER NOT NULL);
             CREATE TABLE IF NOT EXISTS suspects (change_id INTEGER NOT NULL, tool_use_id TEXT NOT NULL);
@@ -49,10 +96,25 @@ public sealed class ReceiptStore : IDisposable
     {
         // Deferred is false, so this is BEGIN IMMEDIATE: the write lock is taken before the snapshot is read.
         using var transaction = _db.BeginTransaction(deferred: false);
+        if (call.Event is "PostToolBatch" or "UserPromptSubmit")
+        {
+            CloseUnfinished(call);
+            transaction.Commit();
+            return;
+        }
+
         var fingerprinter = new Fingerprinter(FingerprintKey());
         var (previous, previousNumber) = LastSnapshot();
         var now = read(fingerprinter, previous);
         var number = Scalar<long>("INSERT INTO snapshots (taken) VALUES ($taken) RETURNING number", ("$taken", now.Taken.ToString("o")));
+
+        // The commands of a session that died end at this snapshot, the first to notice.
+        foreach (var claude in OpenClaudeProcesses().Where(c => !_isAlive(c)))
+        {
+            Execute(
+                "UPDATE commands SET end_snapshot = $number WHERE claude_pid = $pid AND claude_started = $started AND end_snapshot IS NULL",
+                ("$number", number), ("$pid", claude.Pid), ("$started", claude.StartedTicks));
+        }
 
         if (previous is not null)
         {
@@ -72,8 +134,12 @@ public sealed class ReceiptStore : IDisposable
         if (call.Event == "PreToolUse")
         {
             Execute(
-                "INSERT OR IGNORE INTO commands (tool_use_id, session, tool, start_snapshot) VALUES ($tool_use_id, $session, $tool, $number)",
-                ("$tool_use_id", call.ToolUseId), ("$session", call.Session), ("$tool", call.Tool), ("$number", number));
+                """
+                INSERT OR IGNORE INTO commands (tool_use_id, session, tool, start_snapshot, claude_pid, claude_started)
+                VALUES ($tool_use_id, $session, $tool, $number, $pid, $started)
+                """,
+                ("$tool_use_id", call.ToolUseId), ("$session", call.Session), ("$tool", call.Tool), ("$number", number),
+                ("$pid", (object?)call.Claude?.Pid ?? DBNull.Value), ("$started", (object?)call.Claude?.StartedTicks ?? DBNull.Value));
         }
         else if (call.Event is "PostToolUse" or "PostToolUseFailure")
         {
@@ -87,6 +153,33 @@ public sealed class ReceiptStore : IDisposable
     }
 
     public IReadOnlyList<Command> Commands() => Commands("");
+
+    // A denied call fires PreToolUse and nothing else, and an interrupted turn can skip PostToolBatch too. These end
+    // at the latest snapshot without taking a new one: a change such a call made after it goes unblamed, which is
+    // better than blaming the wrong command, and batches and prompts cost no snapshot.
+    private void CloseUnfinished(HookCall call)
+    {
+        var latest = Scalar<long>("SELECT coalesce(max(number), 0) FROM snapshots");
+        if (call.Event == "UserPromptSubmit")
+        {
+            Execute("UPDATE commands SET end_snapshot = $latest WHERE session = $session AND end_snapshot IS NULL", ("$latest", latest), ("$session", call.Session));
+            return;
+        }
+
+        foreach (var id in call.BatchToolUseIds ?? [])
+        {
+            Execute("UPDATE commands SET end_snapshot = $latest WHERE tool_use_id = $id AND end_snapshot IS NULL", ("$latest", latest), ("$id", id));
+        }
+    }
+
+    private List<ClaudeProcess> OpenClaudeProcesses()
+    {
+        var processes = new List<ClaudeProcess>();
+        Each(
+            "SELECT DISTINCT claude_pid, claude_started FROM commands WHERE end_snapshot IS NULL AND claude_pid IS NOT NULL",
+            row => processes.Add(new ClaudeProcess(row.GetInt32(0), row.GetInt64(1))));
+        return processes;
+    }
 
     public IReadOnlyList<StoredVerdict> Verdicts()
     {

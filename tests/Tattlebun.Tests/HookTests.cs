@@ -28,6 +28,16 @@ public sealed class HookTests : IDisposable
         Assert.Equal([new Command("session-1", "toolu_1", 1, 2)], store.Commands());
     }
 
+    [Fact]
+    public void A_PostToolBatch_payload_closes_the_calls_it_lists()
+    {
+        Run(Payload("PreToolUse"), (_, _) => Snap());
+        Run("""{"session_id":"session-1","hook_event_name":"PostToolBatch","tool_calls":[{"tool_name":"Bash","tool_use_id":"toolu_1"}]}""", (_, _) => Snap());
+
+        using var store = new ReceiptStore(StorePath);
+        Assert.Equal([new Command("session-1", "toolu_1", 1, 1)], store.Commands());
+    }
+
     // The trust contract: a command can hold a token, so it never reaches the store.
     [Fact]
     public void The_command_never_reaches_the_store()

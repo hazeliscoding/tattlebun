@@ -21,7 +21,12 @@ public static class HookRun
 
             // Only these fields reach the store; the command and its output never do.
             using var store = new ReceiptStore(storePath);
-            store.Record(new HookCall(input.HookEventName, input.SessionId, input.ToolUseId ?? "", input.ToolName ?? ""), read);
+            store.Record(
+                new HookCall(
+                    input.HookEventName, input.SessionId, input.ToolUseId ?? "", input.ToolName ?? "",
+                    [.. input.ToolCalls?.Select(c => c.ToolUseId).OfType<string>() ?? []],
+                    input.HookEventName == "PreToolUse" ? ClaudeProcess.FromEnvironment() : null),
+                read);
         }
         catch (Exception)
         {
@@ -32,7 +37,9 @@ public static class HookRun
     }
 }
 
-internal sealed record HookInput(string? SessionId, string? HookEventName, string? ToolName, string? ToolUseId);
+internal sealed record HookInput(string? SessionId, string? HookEventName, string? ToolName, string? ToolUseId, IReadOnlyList<BatchCall>? ToolCalls);
+
+internal sealed record BatchCall(string? ToolUseId);
 
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower)]
 [JsonSerializable(typeof(HookInput))]
