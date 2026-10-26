@@ -29,32 +29,32 @@ jobs:
           global-json-file: global.json
 
       - name: Restore
-        run: dotnet restore Tattlebun.slnx
+        run: dotnet restore Tattlehop.slnx
 
       - name: Build
-        run: dotnet build Tattlebun.slnx --configuration Release --no-restore
+        run: dotnet build Tattlehop.slnx --configuration Release --no-restore
 
       - name: Test
-        run: dotnet test --solution Tattlebun.slnx --configuration Release --no-build
+        run: dotnet test --solution Tattlehop.slnx --configuration Release --no-build
 
       - name: Format
-        run: dotnet format Tattlebun.slnx --verify-no-changes --no-restore
+        run: dotnet format Tattlehop.slnx --verify-no-changes --no-restore
 
       # Trim and AOT warnings only appear at publish, so they fail the build here.
       - name: Publish the tray app
-        run: dotnet publish src/Tattlebun.Desktop --configuration Release --runtime win-x64 -warnaserror -o publish/Tattlebun.Desktop
+        run: dotnet publish src/Tattlehop.Desktop --configuration Release --runtime win-x64 -warnaserror -o publish/Tattlehop.Desktop
 
       - name: Publish the hook
-        run: dotnet publish src/Tattlebun.Hook --configuration Release --runtime win-x64 -warnaserror -o publish/Tattlebun.Hook
+        run: dotnet publish src/Tattlehop.Hook --configuration Release --runtime win-x64 -warnaserror -o publish/Tattlehop.Hook
 
       # Exit code 2 from a PreToolUse hook blocks the agent, and stdout can be read as a decision.
       - name: Smoke-test the native hook
         shell: pwsh
         run: |
           $payload = '{"session_id":"ci","hook_event_name":"PreToolUse","tool_name":"Bash","tool_use_id":"toolu_ci","tool_input":{"command":"echo hi"}}'
-          $out = $payload | & "publish\Tattlebun.Hook\tattlebun-hook.exe"
-          if ($LASTEXITCODE -ne 0) { throw "tattlebun-hook exited with $LASTEXITCODE" }
-          if ($out) { throw "tattlebun-hook wrote to stdout" }
+          $out = $payload | & "publish\Tattlehop.Hook\tattlehop-hook.exe"
+          if ($LASTEXITCODE -ne 0) { throw "tattlehop-hook exited with $LASTEXITCODE" }
+          if ($out) { throw "tattlehop-hook wrote to stdout" }
 
       # gitleaks is pinned and checked against its release checksum. --full-history HEAD scans this branch's
       # history only; by default it scans every ref, so one branch's leak would fail every run.

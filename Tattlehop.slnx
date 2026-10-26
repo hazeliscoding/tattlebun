@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Tattlehop.Core/Tattlehop.Core.csproj" />
+    <Project Path="src/Tattlehop.Windows/Tattlehop.Windows.csproj" />
+    <Project Path="src/Tattlehop.Hook/Tattlehop.Hook.csproj" />
+    <Project Path="src/Tattlehop.Desktop/Tattlehop.Desktop.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Tattlehop.Tests/Tattlehop.Tests.csproj" />
+  </Folder>
+</Solution>

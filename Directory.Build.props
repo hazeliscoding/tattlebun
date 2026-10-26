@@ -1,6 +1,6 @@
 <Project>
   <PropertyGroup>
-    <!-- Tattlebun only runs on Windows; reading the registry and the tray need the Windows TFM. -->
+    <!-- Tattlehop only runs on Windows; reading the registry and the tray need the Windows TFM. -->
     <TargetFramework>net10.0-windows</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
@@ -13,10 +13,10 @@
 
     <Version>0.1.0</Version>
     <Authors>Hazel Granados</Authors>
-    <Company>Tattlebun</Company>
-    <Product>Tattlebun</Product>
+    <Company>Tattlehop</Company>
+    <Product>Tattlehop</Product>
     <Copyright>Copyright 2026 Hazel Granados</Copyright>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
-    <RepositoryUrl>https://github.com/hazeliscoding/tattlebun</RepositoryUrl>
+    <RepositoryUrl>https://github.com/hazeliscoding/tattlehop</RepositoryUrl>
   </PropertyGroup>
 </Project>

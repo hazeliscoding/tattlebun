@@ -1,16 +1,16 @@
 {
-  "name": "tattlebun",
+  "name": "tattlehop",
   "version": "0.1.0",
-  "description": "Keeps a receipt of what each agent command changed on your PC outside the repo. Needs the Tattlebun app.",
+  "description": "Keeps a receipt of what each agent command changed on your PC outside the repo. Needs the Tattlehop app.",
   "author": { "name": "Hazel Granados" },
-  "homepage": "https://github.com/hazeliscoding/tattlebun",
-  "repository": "https://github.com/hazeliscoding/tattlebun",
+  "homepage": "https://github.com/hazeliscoding/tattlehop",
+  "repository": "https://github.com/hazeliscoding/tattlehop",
   "license": "Apache-2.0",
   "userConfig": {
     "hook_path": {
       "type": "file",
-      "title": "tattlebun-hook.exe",
-      "description": "Where Tattlebun installed tattlebun-hook.exe, usually %LOCALAPPDATA%\\Tattlebun\\current\\tattlebun-hook.exe. The Tattlebun tray app shows the exact path.",
+      "title": "tattlehop-hook.exe",
+      "description": "Where Tattlehop installed tattlehop-hook.exe, usually %LOCALAPPDATA%\\Tattlehop\\current\\tattlehop-hook.exe. The Tattlehop tray app shows the exact path.",
       "required": true
     }
   }

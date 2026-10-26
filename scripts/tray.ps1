@@ -1,5 +1,5 @@
-# Checks a running Tattlebun's tray icon through UI Automation: opens its menu, optionally saves a screenshot
-# of it, chooses Quit Tattlebun and waits for the process to end. It moves the cursor briefly and restores it.
+# Checks a running Tattlehop's tray icon through UI Automation: opens its menu, optionally saves a screenshot
+# of it, chooses Quit Tattlehop and waits for the process to end. It moves the cursor briefly and restores it.
 # Usage: powershell -NoProfile -File scripts/tray.ps1 [<screenshot.png>]
 param([string] $Screenshot)
 
@@ -12,14 +12,14 @@ Add-Type -Namespace W -Name U -MemberDefinition @'
 
 $A = [System.Windows.Automation.AutomationElement]; $S = [System.Windows.Automation.TreeScope]; $P = [System.Windows.Automation.PropertyCondition]
 $root = $A::RootElement
-$app = Get-Process Tattlebun -ErrorAction Stop | Select-Object -First 1
+$app = Get-Process Tattlehop -ErrorAction Stop | Select-Object -First 1
 
 function Buttons($element) { @($element.FindAll($S::Descendants, (New-Object $P($A::ControlTypeProperty, [System.Windows.Automation.ControlType]::Button)))) }
 function Child($class) { $root.FindFirst($S::Children, (New-Object $P($A::ClassNameProperty, $class))) }
 # The icon is on the taskbar itself once it's pinned there, and in the hidden-icons overflow until then.
 function Place {
     $buttons = Buttons (Child 'Shell_TrayWnd')
-    if ($buttons | Where-Object { $_.Current.Name -match '^Tattlebun' }) { return $buttons }
+    if ($buttons | Where-Object { $_.Current.Name -match '^Tattlehop' }) { return $buttons }
     $overflow = Child 'TopLevelWindowForOverflowXamlIsland'
     if (-not $overflow -or $overflow.Current.BoundingRectangle.Width -eq 0) {
         @($buttons | Where-Object { $_.Current.Name -match 'Hidden Icons' })[0].GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
@@ -30,11 +30,11 @@ function Place {
 }
 
 $buttons = @(Place)
-$icon = @($buttons | Where-Object { $_.Current.Name -match '^Tattlebun' })
-if ($icon.Count -ne 1) { 'STOP: Tattlebun icon not found once'; exit 1 }
+$icon = @($buttons | Where-Object { $_.Current.Name -match '^Tattlehop' })
+if ($icon.Count -ne 1) { 'STOP: Tattlehop icon not found once'; exit 1 }
 $b = $icon[0].Current.BoundingRectangle; $x = [int]($b.X + $b.Width / 2); $y = [int]($b.Y + $b.Height / 2)
 $hits = @($buttons | Where-Object { $_.Current.BoundingRectangle.Contains((New-Object System.Windows.Point $x, $y)) })
-if ($hits.Count -ne 1 -or $hits[0].Current.Name -notmatch '^Tattlebun') { 'STOP: the point is not only on Tattlebun'; exit 1 }
+if ($hits.Count -ne 1 -or $hits[0].Current.Name -notmatch '^Tattlehop') { 'STOP: the point is not only on Tattlehop'; exit 1 }
 
 $saved = New-Object System.Drawing.Point; [W.U]::GetCursorPos([ref]$saved) | Out-Null
 [W.U]::SetCursorPos($x, $y) | Out-Null; Start-Sleep -Milliseconds 150
@@ -48,7 +48,7 @@ for ($i = 0; $i -lt 20 -and -not $menu; $i++) {
 }
 # Avalonia places the menu at the cursor when it opens, so the cursor goes back only once it's open.
 [W.U]::SetCursorPos($saved.X, $saved.Y) | Out-Null
-if (-not $menu) { 'STOP: Tattlebun menu did not open'; exit 1 }
+if (-not $menu) { 'STOP: Tattlehop menu did not open'; exit 1 }
 
 if ($Screenshot) {
     Start-Sleep -Milliseconds 300
@@ -60,8 +60,8 @@ if ($Screenshot) {
     'saved ' + $Screenshot
 }
 
-$quit = $menu.FindFirst($S::Descendants, (New-Object $P($A::NameProperty, 'Quit Tattlebun')))
-if (-not $quit) { 'STOP: no Quit Tattlebun item'; exit 1 }
+$quit = $menu.FindFirst($S::Descendants, (New-Object $P($A::NameProperty, 'Quit Tattlehop')))
+if (-not $quit) { 'STOP: no Quit Tattlehop item'; exit 1 }
 $quit.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
-if (-not $app.WaitForExit(5000)) { 'STOP: Tattlebun still running 5 s after Quit'; exit 1 }
-'chose Quit Tattlebun; the process ended'
+if (-not $app.WaitForExit(5000)) { 'STOP: Tattlehop still running 5 s after Quit'; exit 1 }
+'chose Quit Tattlehop; the process ended'

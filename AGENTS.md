@@ -1,6 +1,6 @@
 # AGENTS.md
 
-These are the working rules for agents in this repo. Tattlebun is a Windows tray app (.NET 10, Avalonia 12, NativeAOT, Apache-2.0) that keeps a receipt of what coding agents changed on the PC outside the repo, and undoes those changes once you confirm.
+These are the working rules for agents in this repo. Tattlehop is a Windows tray app (.NET 10, Avalonia 12, NativeAOT, Apache-2.0) that keeps a receipt of what coding agents changed on the PC outside the repo, and undoes those changes once you confirm.
 
 ## Sources of truth
 
@@ -10,14 +10,14 @@ These are the working rules for agents in this repo. Tattlebun is a Windows tray
 
 ## The trust contract (hard rules)
 
-Tattlebun reads people's environment, configs and what their agents ran. They run it only if they can trust it, so never break these, not even in dev tooling that ships.
+Tattlehop reads people's environment, configs and what their agents ran. They run it only if they can trust it, so never break these, not even in dev tooling that ships.
 
-- **Read-only until an undo is confirmed.** A snapshot writes nothing outside Tattlebun's own folder in `%LOCALAPPDATA%`. A tool that reports what changed on your PC can't make changes of its own.
-- **No network call besides the update check.** Velopack in the tray app checks GitHub Releases, and that's all: no telemetry, and nothing about the PC is sent. Tattlebun's own code never references a networking assembly (`HttpClient`, sockets), and the hook never references Velopack; a test enforces both. Receipts describe someone's machine, and they never leave it.
+- **Read-only until an undo is confirmed.** A snapshot writes nothing outside Tattlehop's own folder in `%LOCALAPPDATA%`. A tool that reports what changed on your PC can't make changes of its own.
+- **No network call besides the update check.** Velopack in the tray app checks GitHub Releases, and that's all: no telemetry, and nothing about the PC is sent. Tattlehop's own code never references a networking assembly (`HttpClient`, sockets), and the hook never references Velopack; a test enforces both. Receipts describe someone's machine, and they never leave it.
 - **Never store a file's contents or a variable's value in plain text.** Old values are kept only so undo can put them back, encrypted with DPAPI for the current user, and deleted after 30 days or when the receipt is dismissed. Never write a value, a diff line or a command's output to a log, a test fixture or a debug dump. `.npmrc` and user variables often hold tokens.
 - **Mask secrets on screen.** Values of keys that look like secrets (token, password, auth, key) are masked in diffs and commands. The owner may screen-share a receipt.
-- **Never block the agent.** `tattlebun-hook` catches every failure, exits 0 and prints no decision. Exit code 2 from a `PreToolUse` hook blocks the tool call, so never return it. A snapshot has a budget of 100 ms: never shell out to `npm`, `pip`, `winget` or `reg.exe` from the hook, and keep the plugin's hooks in exec form (`command` plus `args`), because Claude Code otherwise starts them through Git Bash, which added about 120 ms a call.
-- **Never edit Claude Code's settings** or anything else under `~/.claude`. The hooks reach Claude Code only through the plugin the user adds. Tattlebun mustn't make the kind of change it reports.
+- **Never block the agent.** `tattlehop-hook` catches every failure, exits 0 and prints no decision. Exit code 2 from a `PreToolUse` hook blocks the tool call, so never return it. A snapshot has a budget of 100 ms: never shell out to `npm`, `pip`, `winget` or `reg.exe` from the hook, and keep the plugin's hooks in exec form (`command` plus `args`), because Claude Code otherwise starts them through Git Bash, which added about 120 ms a call.
+- **Never edit Claude Code's settings** or anything else under `~/.claude`. The hooks reach Claude Code only through the plugin the user adds. Tattlehop mustn't make the kind of change it reports.
 - **Fair blame.** Tie a change to a command only when that command's interval covers it. When several commands were running, say "one of these"; when none was, say "not tied to a session". A wrong blame is worse than none: it sends people after the wrong agent.
 - **Undo only what the person ticked and confirmed,** and check the current state first. If it changed after the receipt, refuse instead of overwriting the newer change.
 - **Run unelevated.** Don't set `requireAdministrator` in the manifest, and never start an elevated process or a UAC prompt. A change that needs admin gets a command the person runs themselves.
@@ -26,8 +26,8 @@ Tattlebun reads people's environment, configs and what their agents ran. They ru
 ## Code
 
 - .NET 10 with nullable on and warnings as errors. Package versions live in `Directory.Packages.props`.
-- `Tattlebun.Core` holds snapshots as data, the diff, blame by interval and receipts. It never references Avalonia or any Win32 interop; a test will enforce it. Blame takes snapshots, intervals and times as inputs, so its tests run on made-up data.
-- `Tattlebun.Windows` reads and undoes each kind of change. Read the registry and disk directly, and skip a part whose last-write time hasn't changed.
+- `Tattlehop.Core` holds snapshots as data, the diff, blame by interval and receipts. It never references Avalonia or any Win32 interop; a test will enforce it. Blame takes snapshots, intervals and times as inputs, so its tests run on made-up data.
+- `Tattlehop.Windows` reads and undoes each kind of change. Read the registry and disk directly, and skip a part whose last-write time hasn't changed.
 - Win32 calls go through CsWin32 (`NativeMethods.txt`), not hand-written `DllImport`. The generated code is typed and NativeAOT-safe.
 - NativeAOT must stay free of warnings: no reflection-based serialization. Use source generators, including for the hook's JSON.
 
@@ -49,7 +49,7 @@ Tattlebun reads people's environment, configs and what their agents ran. They ru
 One meaning per term. Use these words in code, docs and commits.
 
 - **Session:** one Claude Code session, known by its session ID.
-- **Command:** one tool call in a session that Tattlebun watches: Bash, PowerShell, Write or Edit.
+- **Command:** one tool call in a session that Tattlehop watches: Bash, PowerShell, Write or Edit.
 - **Snapshot:** the state of everything on the watch list at one moment.
 - **Watch list:** the places a snapshot covers. See "What it watches" in the README.
 - **Interval:** the time between two snapshots, from any session.
@@ -63,10 +63,10 @@ One meaning per term. Use these words in code, docs and commits.
 ## Commands
 
 - `uv run --no-project --with fonttools --with uharfbuzz python -I scripts/make_lockup.py <Fredoka-SemiBold.ttf> docs/brand` rebuilds the lockups. Its header says where to get the font.
-- `dotnet run scripts/make-icons.cs` rebuilds `docs/brand/tattlebun.ico` from the mark.
-- `dotnet publish src/Tattlebun.Desktop -c Release -r win-x64 -o publish/Tattlebun.Desktop` builds the native tray exe, and the same with `src/Tattlebun.Hook` builds `tattlebun-hook.exe`. It needs Visual Studio's C++ workload. If linking fails with "'vswhere.exe' is not recognized", put `%ProgramFiles(x86)%\Microsoft Visual Studio\Installer` on `PATH`: VS 18's `vcvarsall.bat` calls `vswhere.exe` by bare name, and the error text lands in the linker path.
-- `dotnet test --solution Tattlebun.slnx` runs the tests.
-- `powershell -NoProfile -File scripts/tray.ps1 [<screenshot.png>]` checks a running Tattlebun through UI Automation: it finds the tray icon, opens its menu, optionally saves a screenshot, and chooses Quit Tattlebun. Avalonia draws the menu as a `TrayPopupRoot` window at the cursor, so the script restores the cursor only once the menu is open.
+- `dotnet run scripts/make-icons.cs` rebuilds `docs/brand/tattlehop.ico` from the mark.
+- `dotnet publish src/Tattlehop.Desktop -c Release -r win-x64 -o publish/Tattlehop.Desktop` builds the native tray exe, and the same with `src/Tattlehop.Hook` builds `tattlehop-hook.exe`. It needs Visual Studio's C++ workload. If linking fails with "'vswhere.exe' is not recognized", put `%ProgramFiles(x86)%\Microsoft Visual Studio\Installer` on `PATH`: VS 18's `vcvarsall.bat` calls `vswhere.exe` by bare name, and the error text lands in the linker path.
+- `dotnet test --solution Tattlehop.slnx` runs the tests.
+- `powershell -NoProfile -File scripts/tray.ps1 [<screenshot.png>]` checks a running Tattlehop through UI Automation: it finds the tray icon, opens its menu, optionally saves a screenshot, and chooses Quit Tattlehop. Avalonia draws the menu as a `TrayPopupRoot` window at the cursor, so the script restores the cursor only once the menu is open.
 
 ## Working style
 
@@ -74,7 +74,7 @@ One meaning per term. Use these words in code, docs and commits.
 - **No AI attribution** in commits or PRs. That means no `Co-Authored-By` trailers, no "Generated with" lines and no session links.
 - **Checks:** automate acceptance checks instead of handing manual steps to the owner. Give every check that tests for an absence a positive control. For example, the network guard must fail on a deliberate `HttpClient`.
 - **Structural rules get tests.** When a decision is a rule about the code's shape, add a test that fails when it's broken.
-- **Tests that change the real PC** (a variable, a package, a startup entry) are explicit tests, use names that start with `TattlebunTest`, clean up after themselves, and never touch the owner's real dotfiles. Delete a variable through the registry API or `Remove-ItemProperty`: from PowerShell, `[Environment]::SetEnvironmentVariable(name, $null, 'User')` leaves an empty value behind. A test that leaves junk behind is the very thing Tattlebun exists to catch.
+- **Tests that change the real PC** (a variable, a package, a startup entry) are explicit tests, use names that start with `TattlehopTest`, clean up after themselves, and never touch the owner's real dotfiles. Delete a variable through the registry API or `Remove-ItemProperty`: from PowerShell, `[Environment]::SetEnvironmentVariable(name, $null, 'User')` leaves an empty value behind. A test that leaves junk behind is the very thing Tattlehop exists to catch.
 - **Validation:** evidence comes from dogfooding and public signals (issues, downloads). Don't plan interviews, recruiting or outreach.
 - **Docs:** short and concise. Prefer editing `ROADMAP.md` over creating new planning documents.
 - **Code comments:** explain why, not what. Comment only what the code can't say for itself: a non-obvious constraint, a Win32 or Claude Code quirk and its cause, or a line that keeps the trust contract. Don't restate names or types, and don't leave commented-out code.

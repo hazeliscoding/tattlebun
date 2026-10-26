@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Tattlehop.Hook</RootNamespace>
+    <AssemblyName>tattlehop-hook</AssemblyName>
+    <AssemblyTitle>Tattlehop hook</AssemblyTitle>
+    <ApplicationIcon>..\..\docs\brand\tattlehop.ico</ApplicationIcon>
+    <PublishAot>true</PublishAot>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Tattlehop.Core\Tattlehop.Core.csproj" />
+    <ProjectReference Include="..\Tattlehop.Windows\Tattlehop.Windows.csproj" />
+  </ItemGroup>
+
+</Project>

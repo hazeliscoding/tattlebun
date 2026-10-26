@@ -15,7 +15,7 @@ var mark = svg.Picture ?? throw new InvalidOperationException("mark.svg did not 
 int[] sizes = [16, 20, 24, 32, 40, 48, 64, 128, 256];
 var pngs = sizes.Select(size => Render(mark, size)).ToList();
 
-using var ico = File.Create(Path.Combine(brand, "tattlebun.ico"));
+using var ico = File.Create(Path.Combine(brand, "tattlehop.ico"));
 using var writer = new BinaryWriter(ico);
 writer.Write((ushort)0);
 writer.Write((ushort)1);
@@ -39,7 +39,7 @@ foreach (var png in pngs)
     writer.Write(png);
 }
 
-Console.WriteLine($"Wrote tattlebun.ico ({string.Join(", ", sizes)})");
+Console.WriteLine($"Wrote tattlehop.ico ({string.Join(", ", sizes)})");
 
 static byte[] Render(SKPicture mark, int size)
 {

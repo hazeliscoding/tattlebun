@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <RootNamespace>Tattlehop.Desktop</RootNamespace>
+    <AssemblyName>Tattlehop</AssemblyName>
+    <!-- Shown by Windows as the file description, e.g. in Task Manager. -->
+    <AssemblyTitle>Tattlehop</AssemblyTitle>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>..\..\docs\brand\tattlehop.ico</ApplicationIcon>
+    <PublishAot>true</PublishAot>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <BuiltInComInteropSupport>false</BuiltInComInteropSupport>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Tattlehop.Core\Tattlehop.Core.csproj" />
+    <ProjectReference Include="..\Tattlehop.Windows\Tattlehop.Windows.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" />
+    <PackageReference Include="Avalonia.Desktop" />
+    <PackageReference Include="Avalonia.Themes.Fluent" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <AvaloniaResource Include="..\..\docs\brand\tattlehop.ico" Link="Assets\tattlehop.ico" />
+  </ItemGroup>
+
+</Project>

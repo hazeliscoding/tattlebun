@@ -1,12 +1,12 @@
 {
-  "name": "tattlebun",
+  "name": "tattlehop",
   "owner": { "name": "Hazel Granados" },
-  "metadata": { "description": "The Claude Code plugin for Tattlebun, a Windows tray app that keeps a receipt of what agents changed on your PC." },
+  "metadata": { "description": "The Claude Code plugin for Tattlehop, a Windows tray app that keeps a receipt of what agents changed on your PC." },
   "plugins": [
     {
-      "name": "tattlebun",
+      "name": "tattlehop",
       "source": "./plugin",
-      "description": "Keeps a receipt of what each agent command changed on your PC outside the repo. Needs the Tattlebun app."
+      "description": "Keeps a receipt of what each agent command changed on your PC outside the repo. Needs the Tattlehop app."
     }
   ]
 }
